@@ -1,0 +1,21 @@
+# Simple Scene - 5 spheres, 2 lights
+# Format: object_type parameters...
+# sphere: x y z radius r g b metallic roughness shininess
+# light: x y z r g b intensity
+
+# Spheres
+sphere 0 0 -20 2 1.0 0.0 0.0 0.0 1.0 10
+sphere 3 0 -20 2 0.0 1.0 0.0 0.0 1.0 10
+sphere -3 0 -20 2 0.0 0.0 1.0 0.0 1.0 10
+sphere 0 0 -15 1 1.0 1.0 1.0 0.9 0.1 100
+sphere 0 -102 -20 100 0.5 0.5 0.5 0.0 1.0 5
+
+# Lights
+light 10 10 -10 1.0 1.0 1.0 0.7
+light -10 10 -10 1.0 1.0 0.8 0.5
+
+# Ambient
+ambient 0.1 0.1 0.1
+
+# Camera
+camera 0 2 5 0 0 -20 60
