@@ -57,12 +57,12 @@ make benchmark
 
 Week 1: Foundation (Serial + OpenMP) Plan:
 
-[ ] : Implement sphere intersection, test single sphere
-[ ] : Add basic shading (ambient + diffuse)
-[ ] : Add shadows and multiple spheres
-[ ] : Add specular and reflections
-[ ] : Clean up serial, start OpenMP
-[ ] : Optimize OpenMP scheduling, document
+- [ ] : Implement sphere intersection, test single sphere
+- [ ] : Add basic shading (ambient + diffuse)
+- [ ] : Add shadows and multiple spheres
+- [ ] : Add specular and reflections
+- [ ] : Clean up serial, start OpenMP
+- [ ] : Optimize OpenMP scheduling, document
 
 Key Principle: GET SERIAL WORKING FIRST!
 
