@@ -55,23 +55,16 @@ make test
 make benchmark
 ```
 
-### What's Different in UNIX Version
+Week 1: Foundation (Serial + OpenMP) Plan:
 
-1. **No Windows-specific defines** - M_PI works directly
-2. **Clean headers** - No `_USE_MATH_DEFINES` needed
-3. **Proper OpenMP handling** - Wrapped with `#ifdef _OPENMP`
-4. **No hittable.h dependency** - material.h is self-contained
-5. **Comprehensive Makefile** - All targets, profiling, and utilities
+- [ ] : Implement sphere intersection, test single sphere
+- [ ] : Add basic shading (ambient + diffuse)
+- [ ] : Add shadows and multiple spheres
+- [ ] : Add specular and reflections
+- [ ] : Clean up serial, start OpenMP
+- [ ] : Optimize OpenMP scheduling, document
 
-### Files You DON'T Need (Windows-specific)
-
-- ❌ math_constants.h (not needed on UNIX)
-- ❌ CS420_RayTracer.vcxproj 
-- ❌ build.bat
-- ❌ test_setup.cpp (Windows test)
-- ❌ VS_BUILD.md
-- ❌ INTELLISENSE_FIX.md
-- ❌ .vscode/ folder
+Key Principle: GET SERIAL WORKING FIRST!
 
 ### Complete UNIX Makefile Features
 
@@ -106,50 +99,6 @@ make view         # Display output image
 make convert      # PPM to PNG conversion
 make check-env    # Verify environment
 make help         # Show all commands
-```
-
-### Instructor Distribution Package
-
-For student distribution, provide these files:
-
-```
-cs420-ray-tracer.tar.gz containing:
-│
-├── Makefile              # (renamed from Makefile_unix)
-├── README.md             # Student instructions
-├── include/
-│   ├── vec3.h
-│   ├── ray.h
-│   ├── camera.h
-│   ├── sphere.h         # Template with TODOs
-│   ├── material.h       # Template with TODOs
-│   └── scene.h          # Template with TODOs
-├── src/
-│   ├── main.cpp         # Template with TODOs
-│   ├── main_gpu.cu      # Week 2 template
-│   └── main_hybrid.cpp  # Week 3 template
-├── scenes/
-│   ├── simple.txt
-│   ├── medium.txt
-│   └── complex.txt
-└── scripts/
-    ├── test.sh
-    └── benchmark.sh
-```
-
-### Create Distribution Archive
-
-```bash
-# Package for students
-tar -czf cs420_ray_tracer.tar.gz \
-    Makefile README.md \
-    include/ src/ scenes/ scripts/
-
-# Students extract with
-tar -xzf cs420_ray_tracer.tar.gz
-cd cs420-ray-tracer
-make check-env
-make all
 ```
 
 ### Testing on Different UNIX Systems
