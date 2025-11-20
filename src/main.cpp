@@ -47,8 +47,8 @@ Vec3 trace_ray(const Ray& ray, const Scene& scene, int depth) {
         return Vec3(1, 1, 1) * (1.0 - t) + Vec3(0.5, 0.7, 1.0) * t;
     }
     
-    // TODO: STUDENT IMPLEMENTATION
-    // 1. Calculate hit point and normal
+    // TODO: STUDENT IMPLEMENTATION (4)
+    // 1. Calculate hit point (scene.h.intersection) and normal (in ray book)
     // 2. Call scene.shade() for color
     // 3. If material is reflective, recursively trace reflection ray
     // YOUR CODE HERE
@@ -84,12 +84,12 @@ int main(int argc, char* argv[]) {
     
     // TODO: STUDENT - Add spheres to scene
     // Example:
-    // scene.spheres.push_back(Sphere(Vec3(0, 0, -20), 2, 
-    //     Material{Vec3(1, 0, 0), 0.5, 50}));
+    scene.spheres.push_back(Sphere(Vec3(0, 0, -20), 2, 
+        Material{Vec3(1, 0, 0), 0.5, 50}));
     
     // TODO: STUDENT - Add lights to scene
     // Example:
-    // scene.lights.push_back(Light{Vec3(10, 10, -10), Vec3(1, 1, 1), 1.0});
+    scene.lights.push_back(Light{Vec3(10, 10, -10), Vec3(1, 1, 1), 1.0});
     
     // Setup camera
     Camera camera(Vec3(0, 0, 0), Vec3(0, 0, -1), 60);
@@ -128,6 +128,7 @@ int main(int argc, char* argv[]) {
     
     // YOUR OPENMP CODE HERE
     // Hint: Use #pragma omp parallel for with appropriate scheduling
+    // Dynamic will likely have best performance
     
     end = std::chrono::high_resolution_clock::now();
     diff = end - start;
