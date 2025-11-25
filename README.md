@@ -61,8 +61,10 @@ Week 1: Foundation (Serial + OpenMP) Plan:
 - [x] : Add basic shading (ambient + diffuse)
 - [x] : Add shadows and multiple spheres
 - [x] : Add specular and reflections
-- [ ] : Clean up serial, start OpenMP
-- [ ] : Optimize OpenMP scheduling, document
+- [x] : Clean up serial
+- [ ] : Start OpenMP
+- [ ] : Optimize OpenMP scheduling
+- [ ] : document
 
 Key Principle: GET SERIAL WORKING FIRST!
 

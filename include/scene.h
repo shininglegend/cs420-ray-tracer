@@ -19,25 +19,23 @@ public:
   std::vector<Light> lights;
   Vec3 ambient_light;
 
-  // TODO: Should this be read from somewhere?
-  double k_specular = 0.5;
-
   Scene() : ambient_light(0.1, 0.1, 0.1) {}
 
-  //   Vec3 reflect(const Vecx3 &v, const Vec3 &n) { return v - n * (2 *
-  //   v.dot(n)); }
+  // TODO: Should this be read from somewhere?
+  double k_specular = 0.5;
 
   // Find closest sphere intersection
   bool find_intersection(const Ray &ray, double &t, int &sphere_idx) const {
     t = INFINITY;
     sphere_idx = -1;
 
-    // TODO: STUDENT IMPLEMENTATION (1)
+    // STUDENT IMPLEMENTATION (1)
     // Loop through all spheres and find the closest intersection
     // YOUR CODE HERE
     for (int curr_sphere_idx = 0; curr_sphere_idx < int(spheres.size());
          curr_sphere_idx++) {
       double temp_t = 0;
+      // If an intersection, and smallest t, save it.
       if (spheres[curr_sphere_idx].intersect(ray, temp_t)) {
         if (temp_t < t) {
           sphere_idx = curr_sphere_idx;
@@ -53,7 +51,6 @@ public:
   bool in_shadow(const Vec3 &point, const Light &light) const {
     // STUDENT IMPLEMENTATION (2)
     // Cast ray from point to light and check for intersections
-    // YOUR CODE HERE
 
     // BEGIN AI EDIT: Implemented shadow ray testing
     Vec3 to_light = light.position - point;
@@ -80,50 +77,31 @@ public:
     // Start with ambient lighting
     Vec3 color = ambient_light * mat.color;
 
-    // STUDENT IMPLEMENTATION (3)
+    // STUDENT IMPLEMENTATION (Usually from populi file.)
     // For each light:
-    //   1. Check if in shadow
-    //   2. Calculate diffuse component (Lambert)
-    //   3. Calculate specular component (Phong)
-    // YOUR CODE HERE
     for (int light_idx = 0; light_idx < int(lights.size()); light_idx++) {
+      // 1. Check if in shadow
       if (in_shadow(point, lights[light_idx])) {
         // std::cout << "Skipping...";
         continue;
       }
 
-      // 2. Diffuse (Lambert)
+      // 2. Calculate diffuse component (Lambert)
       Vec3 light_dir = (lights[light_idx].position - point).normalized();
       double n_dot_l = std::max(0.0, dot(normal, light_dir));
       Vec3 diffuse = mat.color * mat.reflectivity * n_dot_l;
 
-      // std::cout << "2. Light direction: (" << light_dir.x << ", " <<
-      // light_dir.y
-      //           << ", " << light_dir.z << ")\n";
-      // std::cout << "   N·L = " << n_dot_l << "\n";
-      // std::cout << "   Diffuse = material * k_d * (N·L) = (" << diffuse.x
-      //           << ", " << diffuse.y << ", " << diffuse.z << ")\n";
-
-      color = diffuse + color;
-
-      // 3. Phong / Specular
+      // 3. Calculate specular component (Phong)
+      // Hardcoded the reflection calculation
       Vec3 reflect_dir =
           (light_dir * -1) - normal * (2 * dot((light_dir * -1), normal));
-      // Vec3 reflect_dir =reflect(light_dir * -1, normal);
+      // Vec3 reflect_dir =reflect(light_dir * -1, normal); // old
       double r_dot_v = std::max(0.0, dot(reflect_dir, view_dir));
       double spec_factor = pow(r_dot_v, mat.shininess);
       Vec3 specular = lights[light_idx].color * k_specular * spec_factor;
 
-      // std::cout << "3. View direction: (" << view_dir.x << ", " << view_dir.y
-      //           << ", " << view_dir.z << ")\n";
-      // std::cout << "   Reflection direction: (" << reflect_dir.x << ", "
-      //           << reflect_dir.y << ", " << reflect_dir.z << ")\n";
-      // std::cout << "   R·V = " << r_dot_v << "\n";
-      // std::cout << "   (R·V)^" << 32 << " = " << spec_factor << "\n";
-      // std::cout << "   Specular = light * k_s * (R·V)^n = (" << specular.x
-      //           << ", " << specular.y << ", " << specular.z << ")\n";
-
-      color = specular + color;
+      // Add it all together
+      color = specular + diffuse + color;
     }
 
     return color;
