@@ -1,6 +1,7 @@
 #ifndef SCENE_H
 #define SCENE_H
 
+#include "math_constants.h"
 #include "ray.h"
 #include "sphere.h"
 #include "vec3.h"
@@ -31,7 +32,7 @@ public:
     // TODO: STUDENT IMPLEMENTATION (1)
     // Loop through all spheres and find the closest intersection
     // YOUR CODE HERE
-    for (int curr_sphere_idx = 0; curr_sphere_idx < spheres.size();
+    for (int curr_sphere_idx = 0; curr_sphere_idx < int(spheres.size());
          curr_sphere_idx++) {
       double temp_t = 0;
       if (spheres[curr_sphere_idx].intersect(ray, temp_t)) {
@@ -51,17 +52,19 @@ public:
     // Cast ray from point to light and check for intersections
     // YOUR CODE HERE
 
-    // BEGIN AI EDIT: Implemented shadow ray testing
-    Vec3 light_dir = (light.position - point).normalized();
+    // BEGIN AI EDIT: Implemented shadow ray testing (FIXED EPSILON BUG)
+    Vec3 to_light = light.position - point;
+    double light_distance = to_light.length();
+    Vec3 light_dir = to_light.normalized();
 
-    // Offset this to avoid self-intersection
-    Ray shadow_ray(point + light_dir * 0.001, light_dir);
-    double light_distance = (light.position - point).length();
+    // Cast shadow ray (no offset - use epsilon in comparison instead)
+    Ray shadow_ray(point, light_dir);
 
     double t;
     int sphere_idx;
     if (find_intersection(shadow_ray, t, sphere_idx)) {
-      return t < light_distance;
+      // Check if intersection is beyond epsilon (avoid self-intersection) and before light
+      return t > EPSILON && t < light_distance;
     }
     // END AI EDIT
     return false;
@@ -78,21 +81,24 @@ public:
     //   2. Calculate diffuse component (Lambert)
     //   3. Calculate specular component (Phong)
     // YOUR CODE HERE
-    for (int light_idx = 0; light_idx < lights.size(); light_idx++) {
+    for (int light_idx = 0; light_idx < int(lights.size()); light_idx++) {
       if (in_shadow(point, lights[light_idx])) {
+        std::cout << "Skipping...";
         continue;
       }
-      //   // 2. Diffuse (Lambert)
-      //   Vec3 light_dir = (lights[light_idx].position - point).normalized();
-      //   double n_dot_l = std::max(0.0, dot(normal, light_dir));
-      //   Vec3 diffuse = mat.color * mat.reflectivity * n_dot_l;
 
-      //   std::cout << "2. Light direction: (" << light_dir.x << ", " <<
-      //   light_dir.y
-      //             << ", " << light_dir.z << ")\n";
-      //   std::cout << "   N·L = " << n_dot_l << "\n";
-      //   std::cout << "   Diffuse = material * k_d * (N·L) = (" << diffuse.x
-      //             << ", " << diffuse.y << ", " << diffuse.z << ")\n";
+      // 2. Diffuse (Lambert)
+      Vec3 light_dir = (lights[light_idx].position - point).normalized();
+      double n_dot_l = std::max(0.0, dot(normal, light_dir));
+      Vec3 diffuse = mat.color * mat.reflectivity * n_dot_l;
+
+      // std::cout << "2. Light direction: (" << light_dir.x << ", " << light_dir.y
+      //           << ", " << light_dir.z << ")\n";
+      // std::cout << "   N·L = " << n_dot_l << "\n";
+      // std::cout << "   Diffuse = material * k_d * (N·L) = (" << diffuse.x
+      //           << ", " << diffuse.y << ", " << diffuse.z << ")\n";
+
+      color = diffuse + color;
 
       //   // 3. Phong / Specular
       //   Vec3 reflect_dir = reflect(light_dir * -1, normal);

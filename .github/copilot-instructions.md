@@ -2,10 +2,12 @@
 
 ## Project Overview
 Academic ray tracer implementing progressive parallelization: Serial → OpenMP → CUDA → Hybrid. This is a **student project** with intentional TODO markers - completeness varies by implementation phase.
+This project is loosely following the "Ray Tracing in One Weekend" book, freely available online.
 
 ### IMPORTANT
 - This project is for a systems and parallel processing class. 
 - Whenever you edit code, you MUST add a comment at the beginning and end of your edit showing your edits (minimal comment is fine.) 
+- Doing more than the minimal amount of work unless explicitly requested is a failure. Touch the least amount of code possible, unless told to do otherwise.
 
 ## Architecture & Data Flow
 
