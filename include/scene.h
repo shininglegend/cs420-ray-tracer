@@ -5,6 +5,7 @@
 #include "sphere.h"
 #include "vec3.h"
 #include "ray.h"
+#include "math_constants.h"
 
 struct Light {
     Vec3 position;
@@ -22,7 +23,7 @@ public:
     
     // Find closest sphere intersection
     bool find_intersection(const Ray& ray, double& t, int& sphere_idx) const {
-        t = INFINITY;
+        t = INFINITY_DOUBLE;
         sphere_idx = -1;
         
         // TODO: STUDENT IMPLEMENTATION

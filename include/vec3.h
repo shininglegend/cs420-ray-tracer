@@ -28,5 +28,8 @@ inline double dot(const Vec3& a, const Vec3& b) {
 inline Vec3 cross(const Vec3& a, const Vec3& b) {
     return Vec3(a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x);
 }
-
+// Added to correct code inconsistencies
+inline Vec3 reflect(const Vec3& v, const Vec3& n) {
+    return v - n * 2.0 * dot(v, n);
+}
 #endif
