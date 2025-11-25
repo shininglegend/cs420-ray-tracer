@@ -17,6 +17,9 @@ struct Vec3 {
     double dot(const Vec3& v) const { return x*v.x + y*v.y + z*v.z; }
 };
 
+Vec3 reflect(const Vec3& v, const Vec3& n) {
+    return v - n * (2 * v.dot(n));
+}
 
 int main() {
     std::cout << "=== Phong Shading Demo ===\n\n";

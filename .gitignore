@@ -2,3 +2,5 @@ output_*.ppm
 ray_serial
 populi-files/*
 !populi-files/*.cpp
+.cache/*
+.vscode/*

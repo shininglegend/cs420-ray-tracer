@@ -3,7 +3,6 @@
 
 #include "vec3.h"
 #include "ray.h"
-#include "vec3.h"
 #include <algorithm>
 
 struct Material
@@ -37,30 +36,30 @@ public:
 
         double discriminant = b * b - 4 * a * c;
 
-        std::cout << "  Quadratic: " << a << "t² + " << b << "t + " << c << " = 0\n";
-        std::cout << "  Discriminant: " << discriminant;
+        // std::cout << "  Quadratic: " << a << "t² + " << b << "t + " << c << " = 0\n";
+        // std::cout << "  Discriminant: " << discriminant;
 
         // 2. Check if discriminant >= 0
         if (discriminant < 0)
         {
-            std::cout << " (negative - no intersection)\n";
+            // std::cout << " (negative - no intersection)\n";
             return false;
         }
         // 3. Calculate t values
         if (discriminant == 0)
         {
             double t0 = -b / (2 * a);
-            Vec3 hit = ray.origin + ray.direction * t;
-            std::cout << " (zero - one intersection at t=" << t << ")\n";
-            std::cout << "  Hit point: "; hit.normalized(); std::cout << "\n";
+            // Vec3 hit = ray.origin + ray.direction * t;
+            // std::cout << " (zero - one intersection at t=" << t << ")\n";
+            // std::cout << "  Hit point: "; hit.normalized(); std::cout << "\n";
             t = t0;
             return true;
         }
         // 4. Return smallest positive t
         double t1 = (-b - sqrt(discriminant)) / (2 * a);
         double t2 = (-b + sqrt(discriminant)) / (2 * a);
-        std::cout << " (positive - two intersections)\n";
-        std::cout << "  t1=" << t1 << ", t2=" << t2 << "\n";
+        // std::cout << " (positive - two intersections)\n";
+        // std::cout << "  t1=" << t1 << ", t2=" << t2 << "\n";
 
         t = std::min(t1, t2); // By claude :)
         return true;
