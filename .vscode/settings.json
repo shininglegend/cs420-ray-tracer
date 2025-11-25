@@ -5,7 +5,9 @@
         "chrono": "cpp",
         "thread": "cpp",
         "atomic": "cpp",
-        "cmath": "cpp"
+        "cmath": "cpp",
+        "fstream": "cpp",
+        "iostream": "cpp"
     },
     "C_Cpp.default.includePath": [
         "${workspaceFolder}/include"
