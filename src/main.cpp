@@ -6,9 +6,9 @@
 #include <fstream>
 #include <iostream>
 #include <omp.h>
-#include <vector>
 #include <sstream>
 #include <string>
+#include <vector>
 
 class Camera {
 public:
@@ -57,14 +57,30 @@ Vec3 trace_ray(const Ray &ray, const Scene &scene, int depth) {
   Vec3 norm = scene.spheres[sphere_idx].normal_at(hit);
 
   // 2. Call scene.shade() for color
-  Vec3 shade = scene.shade(hit, norm, scene.spheres[sphere_idx].material, Vec3());
+  Vec3 shade =
+      scene.shade(hit, norm, scene.spheres[sphere_idx].material, Vec3());
 
   // 3. If material is reflective, recursively trace reflection ray
   if (scene.spheres[sphere_idx].material.reflectivity > 0) {
-    // TODO: Fill this out
+    // BEGIN AI EDIT: Implement recursive reflection
+    Vec3 reflected_dir = ray.direction - norm * 2.0 * dot(ray.direction, norm);
+    Ray reflected_ray(hit, reflected_dir);
+    Vec3 reflected_color = trace_ray(reflected_ray, scene, depth - 1);
+
+    double refl = scene.spheres[sphere_idx].material.reflectivity;
+    shade = shade * (1.0 - refl) + reflected_color * refl;
+    // END AI EDIT
   }
 
   return shade;
+}
+
+// Adjust for gamma 2
+inline double linear_to_gamma(double linear_component) {
+  if (linear_component > 0)
+    return std::sqrt(linear_component);
+
+  return 0;
 }
 
 // Write image to PPM file
@@ -76,16 +92,23 @@ void write_ppm(const std::string &filename,
   for (int j = height - 1; j >= 0; j--) {
     for (int i = 0; i < width; i++) {
       Vec3 color = framebuffer[j * width + i];
-      int r = int(255.99 * std::min(1.0, color.x));
-      int g = int(255.99 * std::min(1.0, color.y));
-      int b = int(255.99 * std::min(1.0, color.z));
+      auto r = color.x;
+      auto g = color.y;
+      auto b = color.z;
+      // Apply a linear to gamma transform for gamma 2
+      r = linear_to_gamma(r);
+      g = linear_to_gamma(g);
+      b = linear_to_gamma(b);
+      r = int(255.99 * std::min(1.0, r));
+      g = int(255.99 * std::min(1.0, g));
+      b = int(255.99 * std::min(1.0, b));
       file << r << " " << g << " " << b << "\n";
     }
   }
 }
 
 // BEGIN AI EDIT: Scene file loading function
-bool load_scene(const std::string& filename, Scene& scene, Camera*& camera) {
+bool load_scene(const std::string &filename, Scene &scene, Camera *&camera) {
   std::ifstream file(filename);
   if (!file.is_open()) {
     std::cerr << "Error: Could not open scene file: " << filename << std::endl;
@@ -96,34 +119,32 @@ bool load_scene(const std::string& filename, Scene& scene, Camera*& camera) {
   Vec3 cam_pos(0, 0, 0);
   Vec3 cam_lookat(0, 0, -1);
   double cam_fov = 60;
-  
+
   while (std::getline(file, line)) {
     // Skip empty lines and comments
-    if (line.empty() || line[0] == '#') continue;
-    
+    if (line.empty() || line[0] == '#')
+      continue;
+
     std::istringstream iss(line);
     std::string type;
     iss >> type;
-    
+
     if (type == "sphere") {
       double x, y, z, radius;
       double r, g, b, metallic, roughness, shininess;
-      iss >> x >> y >> z >> radius >> r >> g >> b >> metallic >> roughness >> shininess;
-      scene.spheres.push_back(
-        Sphere(Vec3(x, y, z), radius, Material{Vec3(r, g, b), metallic, shininess})
-      );
-    }
-    else if (type == "light") {
+      iss >> x >> y >> z >> radius >> r >> g >> b >> metallic >> roughness >>
+          shininess;
+      scene.spheres.push_back(Sphere(
+          Vec3(x, y, z), radius, Material{Vec3(r, g, b), metallic, shininess}));
+    } else if (type == "light") {
       double x, y, z, r, g, b, intensity;
       iss >> x >> y >> z >> r >> g >> b >> intensity;
       scene.lights.push_back(Light{Vec3(x, y, z), Vec3(r, g, b), intensity});
-    }
-    else if (type == "ambient") {
+    } else if (type == "ambient") {
       double r, g, b;
       iss >> r >> g >> b;
       scene.ambient_light = Vec3(r, g, b);
-    }
-    else if (type == "camera") {
+    } else if (type == "camera") {
       double x, y, z, lx, ly, lz, fov;
       iss >> x >> y >> z >> lx >> ly >> lz >> fov;
       cam_pos = Vec3(x, y, z);
@@ -131,7 +152,7 @@ bool load_scene(const std::string& filename, Scene& scene, Camera*& camera) {
       cam_fov = fov;
     }
   }
-  
+
   file.close();
   camera = new Camera(cam_pos, cam_lookat, cam_fov);
   return true;
@@ -146,7 +167,7 @@ int main(int argc, char *argv[]) {
 
   // Create scene
   Scene scene;
-  Camera* camera = nullptr;
+  Camera *camera = nullptr;
 
   // BEGIN AI EDIT: Load scene from file if provided
   if (argc > 1) {

@@ -19,6 +19,9 @@ public:
   std::vector<Light> lights;
   Vec3 ambient_light;
 
+  // TODO: Should this be read from somewhere?
+  double k_specular = 0.5;
+
   Scene() : ambient_light(0.1, 0.1, 0.1) {}
 
   //   Vec3 reflect(const Vecx3 &v, const Vec3 &n) { return v - n * (2 *
@@ -48,11 +51,11 @@ public:
 
   // Check if point is in shadow from light
   bool in_shadow(const Vec3 &point, const Light &light) const {
-    // TODO: STUDENT IMPLEMENTATION (2)
+    // STUDENT IMPLEMENTATION (2)
     // Cast ray from point to light and check for intersections
     // YOUR CODE HERE
 
-    // BEGIN AI EDIT: Implemented shadow ray testing (FIXED EPSILON BUG)
+    // BEGIN AI EDIT: Implemented shadow ray testing
     Vec3 to_light = light.position - point;
     double light_distance = to_light.length();
     Vec3 light_dir = to_light.normalized();
@@ -63,7 +66,8 @@ public:
     double t;
     int sphere_idx;
     if (find_intersection(shadow_ray, t, sphere_idx)) {
-      // Check if intersection is beyond epsilon (avoid self-intersection) and before light
+      // Check if intersection is beyond epsilon (avoid self-intersection) and
+      // before light
       return t > EPSILON && t < light_distance;
     }
     // END AI EDIT
@@ -73,9 +77,10 @@ public:
   // Calculate color at intersection point using Phong shading
   Vec3 shade(const Vec3 &point, const Vec3 &normal, const Material &mat,
              const Vec3 &view_dir) const {
+    // Start with ambient lighting
     Vec3 color = ambient_light * mat.color;
 
-    // TODO: STUDENT IMPLEMENTATION (3)
+    // STUDENT IMPLEMENTATION (3)
     // For each light:
     //   1. Check if in shadow
     //   2. Calculate diffuse component (Lambert)
@@ -83,7 +88,7 @@ public:
     // YOUR CODE HERE
     for (int light_idx = 0; light_idx < int(lights.size()); light_idx++) {
       if (in_shadow(point, lights[light_idx])) {
-        std::cout << "Skipping...";
+        // std::cout << "Skipping...";
         continue;
       }
 
@@ -92,7 +97,8 @@ public:
       double n_dot_l = std::max(0.0, dot(normal, light_dir));
       Vec3 diffuse = mat.color * mat.reflectivity * n_dot_l;
 
-      // std::cout << "2. Light direction: (" << light_dir.x << ", " << light_dir.y
+      // std::cout << "2. Light direction: (" << light_dir.x << ", " <<
+      // light_dir.y
       //           << ", " << light_dir.z << ")\n";
       // std::cout << "   N·L = " << n_dot_l << "\n";
       // std::cout << "   Diffuse = material * k_d * (N·L) = (" << diffuse.x
@@ -100,22 +106,24 @@ public:
 
       color = diffuse + color;
 
-      //   // 3. Phong / Specular
-      //   Vec3 reflect_dir = reflect(light_dir * -1, normal);
-      //   double r_dot_v = std::max(0.0, dot(reflect_dir, view_dir));
-      //   double spec_factor = pow(r_dot_v, mat.shininess);
-      //   Vec3 specular = lights[light_idx].color * k_specular * spec_factor;
+      // 3. Phong / Specular
+      Vec3 reflect_dir =
+          (light_dir * -1) - normal * (2 * dot((light_dir * -1), normal));
+      // Vec3 reflect_dir =reflect(light_dir * -1, normal);
+      double r_dot_v = std::max(0.0, dot(reflect_dir, view_dir));
+      double spec_factor = pow(r_dot_v, mat.shininess);
+      Vec3 specular = lights[light_idx].color * k_specular * spec_factor;
 
-      //   std::cout << "3. View direction: (" << view_dir.x << ", " <<
-      //   view_dir.y
-      //             << ", " << view_dir.z << ")\n";
-      //   std::cout << "   Reflection direction: (" << reflect_dir.x << ", "
-      //             << reflect_dir.y << ", " << reflect_dir.z << ")\n";
-      //   std::cout << "   R·V = " << r_dot_v << "\n";
-      //   std::cout << "   (R·V)^" << shininess << " = " << spec_factor <<
-      //   "\n"; std::cout << "   Specular = light * k_s * (R·V)^n = (" <<
-      //   specular.x
-      //             << ", " << specular.y << ", " << specular.z << ")\n";
+      // std::cout << "3. View direction: (" << view_dir.x << ", " << view_dir.y
+      //           << ", " << view_dir.z << ")\n";
+      // std::cout << "   Reflection direction: (" << reflect_dir.x << ", "
+      //           << reflect_dir.y << ", " << reflect_dir.z << ")\n";
+      // std::cout << "   R·V = " << r_dot_v << "\n";
+      // std::cout << "   (R·V)^" << 32 << " = " << spec_factor << "\n";
+      // std::cout << "   Specular = light * k_s * (R·V)^n = (" << specular.x
+      //           << ", " << specular.y << ", " << specular.z << ")\n";
+
+      color = specular + color;
     }
 
     return color;

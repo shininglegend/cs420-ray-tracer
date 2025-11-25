@@ -1,4 +1,5 @@
 output_*.ppm
+output_*.png
 ray_serial
 populi-files/*
 !populi-files/*.cpp

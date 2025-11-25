@@ -59,8 +59,8 @@ Week 1: Foundation (Serial + OpenMP) Plan:
 
 - [x] : Implement sphere intersection, test single sphere
 - [x] : Add basic shading (ambient + diffuse)
-- [ ] : Add shadows and multiple spheres
-- [ ] : Add specular and reflections
+- [x] : Add shadows and multiple spheres
+- [x] : Add specular and reflections
 - [ ] : Clean up serial, start OpenMP
 - [ ] : Optimize OpenMP scheduling, document
 

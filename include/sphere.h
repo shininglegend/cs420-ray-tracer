@@ -21,7 +21,7 @@ public:
 
     Sphere(Vec3 c, double r, Material m) : center(c), radius(r), material(m) {}
 
-    // TODO: STUDENT IMPLEMENTATION
+    // STUDENT IMPLEMENTATION
     // Implement ray-sphere intersection test
     // Return true if ray hits sphere, store distance in t
     // Hint: Solve quadratic equation from ray equation and sphere equation
