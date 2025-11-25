@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+// #define _OPENMP
+
 class Camera {
 public:
   Vec3 position;
@@ -39,7 +41,7 @@ Vec3 trace_ray(const Ray &ray, const Scene &scene, int depth) {
   if (depth <= 0)
     return Vec3(0, 0, 0);
 
-  // TODO: STUDENT IMPLEMENTATION (4)
+  // STUDENT IMPLEMENTATION (4)
   // YOUR CODE HERE
   double t;
   int sphere_idx;
@@ -188,12 +190,12 @@ int main(int argc, char *argv[]) {
 
   // Framebuffer
   std::vector<Vec3> framebuffer(width * height);
+  std::cout << "Rendering (Serial)...\n";
 
   // Timing
   auto start = std::chrono::high_resolution_clock::now();
 
   // SERIAL VERSION
-  std::cout << "Rendering (Serial)...\n";
   for (int j = 0; j < height; j++) {
     if (j % 50 == 0)
       std::cout << "Row " << j << "/" << height << "\n";
@@ -217,17 +219,37 @@ int main(int argc, char *argv[]) {
 // OPENMP VERSION
 #ifdef _OPENMP
   std::cout << "\nRendering (OpenMP)...\n";
+  // Reset the framebugger
+  std::vector<Vec3> framebuffermp(width * height);
   start = std::chrono::high_resolution_clock::now();
 
-  // YOUR OPENMP CODE HERE
-  // Hint: Use #pragma omp parallel for with appropriate scheduling
-  // Dynamic will likely have best performance
+// YOUR OPENMP CODE HERE
+// Hint: Use #pragma omp parallel for with appropriate scheduling
+// Dynamic will likely have best performance
+// Dynamic, complex: 0.7210 - warmed up (1.06 not)
+// Static, complex: 0.8974
+// Guided, 0.9118
+#pragma omp parallel for schedule(dynamic)
+  for (int ij = 0; ij < (height * width); ij++) {
+    int j = floor(double(ij) / width);
+    int i = ij % width;
+    // std::cout << "ij: " << ij << ". j: " << j << "\n";
+
+    if (j % 50 == 0 && i == 0)
+      std::cout << "Row " << j << "/" << height << "\n";
+
+    double u = double(i) / (width - 1);
+    double v = double(j) / (height - 1);
+
+    Ray ray = camera->get_ray(u, v);
+    framebuffermp[j * width + i] = trace_ray(ray, scene, max_depth);
+  }
 
   end = std::chrono::high_resolution_clock::now();
   diff = end - start;
   std::cout << "OpenMP time: " << diff.count() << " seconds\n";
 
-  write_ppm("output_openmp.ppm", framebuffer, width, height);
+  write_ppm("output_openmp.ppm", framebuffermp, width, height);
 #endif
 
   // BEGIN AI EDIT: Cleanup camera
