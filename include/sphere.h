@@ -48,8 +48,13 @@ public:
     // 4. Return smallest positive t (smallest root/closest intersection)
     double t1 = (-b - sqrt(discriminant)) / (2 * a);
     double t2 = (-b + sqrt(discriminant)) / (2 * a);
-
+    if (std::max(t1, t2) < 0) {
+      return false;
+    }
     t = std::min(t1, t2); // By claude :)
+    if (t < 0) {
+      t = std::max(t1, t2);
+    }
     return true;
   }
 
