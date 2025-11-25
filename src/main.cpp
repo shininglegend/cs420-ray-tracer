@@ -7,6 +7,8 @@
 #include <iostream>
 #include <omp.h>
 #include <vector>
+#include <sstream>
+#include <string>
 
 class Camera {
 public:
@@ -82,6 +84,60 @@ void write_ppm(const std::string &filename,
   }
 }
 
+// BEGIN AI EDIT: Scene file loading function
+bool load_scene(const std::string& filename, Scene& scene, Camera*& camera) {
+  std::ifstream file(filename);
+  if (!file.is_open()) {
+    std::cerr << "Error: Could not open scene file: " << filename << std::endl;
+    return false;
+  }
+
+  std::string line;
+  Vec3 cam_pos(0, 0, 0);
+  Vec3 cam_lookat(0, 0, -1);
+  double cam_fov = 60;
+  
+  while (std::getline(file, line)) {
+    // Skip empty lines and comments
+    if (line.empty() || line[0] == '#') continue;
+    
+    std::istringstream iss(line);
+    std::string type;
+    iss >> type;
+    
+    if (type == "sphere") {
+      double x, y, z, radius;
+      double r, g, b, metallic, roughness, shininess;
+      iss >> x >> y >> z >> radius >> r >> g >> b >> metallic >> roughness >> shininess;
+      scene.spheres.push_back(
+        Sphere(Vec3(x, y, z), radius, Material{Vec3(r, g, b), metallic, shininess})
+      );
+    }
+    else if (type == "light") {
+      double x, y, z, r, g, b, intensity;
+      iss >> x >> y >> z >> r >> g >> b >> intensity;
+      scene.lights.push_back(Light{Vec3(x, y, z), Vec3(r, g, b), intensity});
+    }
+    else if (type == "ambient") {
+      double r, g, b;
+      iss >> r >> g >> b;
+      scene.ambient_light = Vec3(r, g, b);
+    }
+    else if (type == "camera") {
+      double x, y, z, lx, ly, lz, fov;
+      iss >> x >> y >> z >> lx >> ly >> lz >> fov;
+      cam_pos = Vec3(x, y, z);
+      cam_lookat = Vec3(lx, ly, lz);
+      cam_fov = fov;
+    }
+  }
+  
+  file.close();
+  camera = new Camera(cam_pos, cam_lookat, cam_fov);
+  return true;
+}
+// END AI EDIT
+
 int main(int argc, char *argv[]) {
   // Image settings
   const int width = 640;
@@ -90,18 +146,24 @@ int main(int argc, char *argv[]) {
 
   // Create scene
   Scene scene;
+  Camera* camera = nullptr;
 
-  // TODO: STUDENT - Add spheres to scene
-  // Example:
-  scene.spheres.push_back(
-      Sphere(Vec3(0, 0, -20), 2, Material{Vec3(1, 0, 0), 0.5, 50}));
-
-  // TODO: STUDENT - Add lights to scene
-  // Example:
-  scene.lights.push_back(Light{Vec3(10, 10, -10), Vec3(1, 1, 1), 1.0});
-
-  // Setup camera
-  Camera camera(Vec3(0, 0, 0), Vec3(0, 0, -1), 60);
+  // BEGIN AI EDIT: Load scene from file if provided
+  if (argc > 1) {
+    if (!load_scene(argv[1], scene, camera)) {
+      return 1;
+    }
+    std::cout << "Loaded scene from " << argv[1] << std::endl;
+    std::cout << "  Spheres: " << scene.spheres.size() << std::endl;
+    std::cout << "  Lights: " << scene.lights.size() << std::endl;
+  } else {
+    // Fallback to hardcoded scene
+    scene.spheres.push_back(
+        Sphere(Vec3(0, 0, -20), 2, Material{Vec3(1, 0, 0), 0.5, 50}));
+    scene.lights.push_back(Light{Vec3(10, 10, -10), Vec3(1, 1, 1), 1.0});
+    camera = new Camera(Vec3(0, 0, 0), Vec3(0, 0, -1), 60);
+  }
+  // END AI EDIT
 
   // Framebuffer
   std::vector<Vec3> framebuffer(width * height);
@@ -119,7 +181,7 @@ int main(int argc, char *argv[]) {
       double u = double(i) / (width - 1);
       double v = double(j) / (height - 1);
 
-      Ray ray = camera.get_ray(u, v);
+      Ray ray = camera->get_ray(u, v);
       framebuffer[j * width + i] = trace_ray(ray, scene, max_depth);
     }
   }
@@ -146,6 +208,10 @@ int main(int argc, char *argv[]) {
 
   write_ppm("output_openmp.ppm", framebuffer, width, height);
 #endif
+
+  // BEGIN AI EDIT: Cleanup camera
+  delete camera;
+  // END AI EDIT
 
   return 0;
 }
