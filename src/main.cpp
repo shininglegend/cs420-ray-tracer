@@ -7,6 +7,7 @@
 #include "ray.h"
 #include "sphere.h"
 #include "scene.h"
+#include "scene_loader.h"
 #include <math_constants.h>
 
 class Camera {
@@ -82,49 +83,49 @@ void create_test_scene(Scene& scene) {
     scene.spheres.push_back(Sphere(
         Vec3(0, -102, -20),           // Center: far below the scene
         100,                          // Radius: very large
-        Material(Vec3(0.5, 0.5, 0.5), 0.0, 10)  // Gray, non-reflective
+        Material{Vec3(0.5, 0.5, 0.5), 0.0, 10}  // Gray, non-reflective
     ));
     
     // Large red sphere (left) - diffuse material
     scene.spheres.push_back(Sphere(
         Vec3(-4, 0, -20),             // Left of center
         2.5,                          // Medium size
-        Material(Vec3(0.9, 0.2, 0.2), 0.1, 30)  // Red, slightly reflective
+        Material{Vec3(0.9, 0.2, 0.2), 0.1, 30}  // Red, slightly reflective
     ));
     
     // Large green sphere (center) - semi-reflective
     scene.spheres.push_back(Sphere(
         Vec3(0, 0, -20),              // Center
         2.5,                          // Medium size
-        Material(Vec3(0.2, 0.8, 0.2), 0.3, 50)  // Green, moderately reflective
+        Material{Vec3(0.2, 0.8, 0.2), 0.3, 50}  // Green, moderately reflective
     ));
     
     // Large blue sphere (right) - more reflective
     scene.spheres.push_back(Sphere(
         Vec3(4, 0, -20),              // Right of center
         2.5,                          // Medium size
-        Material(Vec3(0.2, 0.2, 0.9), 0.5, 80)  // Blue, fairly reflective
+        Material{Vec3(0.2, 0.2, 0.9), 0.5, 80}  // Blue, fairly reflective
     ));
     
     // Small white sphere (front) - highly reflective (mirror-like)
     scene.spheres.push_back(Sphere(
         Vec3(0, -1, -12),             // In front, slightly lower
         1.0,                          // Small
-        Material(Vec3(0.9, 0.9, 0.9), 0.9, 200) // White, very reflective (mirror)
+        Material{Vec3(0.9, 0.9, 0.9), 0.9, 200} // White, very reflective (mirror)
     ));
     
     // Small yellow sphere (back left)
     scene.spheres.push_back(Sphere(
         Vec3(-2, 1.5, -25),           // Back left, elevated
         1.5,                          // Small-medium
-        Material(Vec3(0.9, 0.9, 0.2), 0.2, 40)  // Yellow
+        Material{Vec3(0.9, 0.9, 0.2), 0.2, 40}  // Yellow
     ));
     
     // Small cyan sphere (back right)
     scene.spheres.push_back(Sphere(
         Vec3(3, 2, -28),              // Back right, elevated
         1.5,                          // Small-medium
-        Material(Vec3(0.2, 0.9, 0.9), 0.2, 40)  // Cyan
+        Material{Vec3(0.2, 0.9, 0.9), 0.2, 40}  // Cyan
     ));
     
     // =========================================================================
@@ -168,8 +169,36 @@ int main(int argc, char* argv[]) {
     
     // Create scene
     Scene scene;
-    create_test_scene(scene);
+    SceneData scene_data;
+    std::string scene_file = "scenes/simple.txt";
     
+    // Allow command-line scene selection
+    if (argc > 1) {
+        scene_file = argv[1];
+    }
+    
+    std::cout << "Testing scene loader with: " << scene_file << "\n\n";
+    // Load the scene
+    scene_data = load_scene(scene_file);
+    scene = scene_data.scene;
+    
+    // Print detailed info
+    print_scene_info(scene_data);
+    
+    // =========================================================================
+    // Setup camera
+    // =========================================================================
+    // Camera positioned at origin, looking into the scene (negative Z)
+    // Camera camera(
+    //     Vec3(0, 2, 5),       // Position: slightly above origin, in front of scene
+    //     Vec3(0, 0, -20),     // Look at: center of the sphere arrangement
+    //     60                   // Field of view: 60 degrees
+    // );
+    Camera camera(
+        scene_data.camera.position,
+        scene_data.camera.look_at,
+        scene_data.camera.fov
+    );
     // TODO: STUDENT - Add spheres to scene
     // Example:
     // scene.spheres.push_back(Sphere(Vec3(0, 0, -20), 2, 
