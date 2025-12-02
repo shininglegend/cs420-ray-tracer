@@ -6,7 +6,6 @@
 #include "sphere.h"
 #include "vec3.h"
 #include <vector>
-#include "math_constants.h"
 
 struct Light {
   Vec3 position;
@@ -49,6 +48,7 @@ public:
   }
 
   // Check if point is in shadow from light
+  // Prof. Murphy says this is fine.
   bool in_shadow(const Vec3 &point, const Light &light) const {
     // STUDENT IMPLEMENTATION (2)
     // Cast ray from point to light and check for intersections
@@ -93,10 +93,7 @@ public:
       Vec3 diffuse = mat.color * mat.reflectivity * n_dot_l;
 
       // 3. Calculate specular component (Phong)
-      // Hardcoded the reflection calculation
-      Vec3 reflect_dir =
-          (light_dir * -1) - normal * (2 * dot((light_dir * -1), normal));
-      // Vec3 reflect_dir =reflect(light_dir * -1, normal); // old
+      Vec3 reflect_dir = reflect(light_dir * -1, normal); // old
       double r_dot_v = std::max(0.0, dot(reflect_dir, view_dir));
       double spec_factor = pow(r_dot_v, mat.shininess);
       Vec3 specular = lights[light_idx].color * k_specular * spec_factor;

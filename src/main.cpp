@@ -58,12 +58,10 @@ Vec3 trace_ray(const Ray &ray, const Scene &scene, int depth) {
   // Normalize
   Vec3 norm = scene.spheres[sphere_idx].normal_at(hit);
 
-  // BEGIN AI EDIT: Fixed view_dir for proper Phong specular calculation
   // 2. Call scene.shade() for color
-  Vec3 view_dir = (ray.origin - hit).normalized();
+  Vec3 view_dir = (ray.origin - hit).normalized(); // From Ai
   Vec3 shade =
       scene.shade(hit, norm, scene.spheres[sphere_idx].material, view_dir);
-  // END AI EDIT
 
   // 3. If material is reflective, recursively trace reflection ray
   if (scene.spheres[sphere_idx].material.reflectivity > 0) {
