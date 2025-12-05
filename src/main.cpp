@@ -205,9 +205,6 @@ int main(int argc, char *argv[]) {
   const int width = 640;
   const int height = 480;
   const int max_depth = 10;
-  // BEGIN ANTI-ALIASING EDIT
-  const int samples_per_pixel = 4; // Number of samples for anti-aliasing
-  // END ANTI-ALIASING EDIT
 
   // Create scene
   Scene scene;
@@ -256,20 +253,11 @@ int main(int argc, char *argv[]) {
       std::cout << "Row " << j << "/" << height << "\n";
 
     for (int i = 0; i < width; i++) {
-      // BEGIN AI ANTI-ALIASING EDIT
-      Vec3 color(0, 0, 0);
-      for (int s = 0; s < samples_per_pixel; s++) {
-        // Offset within pixel: 2x2 grid pattern
-        double offset_u = ((s % 2) + 0.5) / 2.0 - 0.5;
-        double offset_v = ((s / 2) + 0.5) / 2.0 - 0.5;
-        double u = (i + offset_u) / (width - 1);
-        double v = (j + offset_v) / (height - 1);
+      double u = double(i) / (width - 1);
+      double v = double(j) / (height - 1);
 
-        Ray ray = camera.get_ray(u, v);
-        color = color + trace_ray(ray, scene, max_depth);
-      }
-      framebuffer[j * width + i] = color * (1.0 / samples_per_pixel);
-      // END ANTI-ALIASING EDIT
+      Ray ray = camera.get_ray(u, v);
+      framebuffer[j * width + i] = trace_ray(ray, scene, max_depth);
     }
   }
 
@@ -302,20 +290,11 @@ int main(int argc, char *argv[]) {
     if (j % 50 == 0 && i == 0)
       std::cout << "Row " << j << "/" << height << "\n";
 
-    // BEGIN ANTI-ALIASING EDIT
-    Vec3 color(0, 0, 0);
-    for (int s = 0; s < samples_per_pixel; s++) {
-      // Offset within pixel: 2x2 grid pattern
-      double offset_u = ((s % 2) + 0.5) / 2.0 - 0.5;
-      double offset_v = ((s / 2) + 0.5) / 2.0 - 0.5;
-      double u = (i + offset_u) / (width - 1);
-      double v = (j + offset_v) / (height - 1);
+    double u = double(i) / (width - 1);
+    double v = double(j) / (height - 1);
 
-      Ray ray = camera.get_ray(u, v);
-      color = color + trace_ray(ray, scene, max_depth);
-    }
-    framebuffermp[j * width + i] = color * (1.0 / samples_per_pixel);
-    // END ANTI-ALIASING EDIT
+    Ray ray = camera.get_ray(u, v);
+    framebuffermp[j * width + i] = trace_ray(ray, scene, max_depth);
   }
 
   end = std::chrono::high_resolution_clock::now();
