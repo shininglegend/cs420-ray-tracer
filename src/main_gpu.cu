@@ -2,6 +2,7 @@
 // CS420 Ray Tracer Project
 // Status: In Progress :)
 
+#include "scene_loader.h"
 #include <cmath>
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
@@ -9,7 +10,6 @@
 #include <iostream>
 #include <math_constants.h>
 #include <vector>
-#include "scene_loader.h"
 
 // Include math constants for cross-platform compatibility
 #ifndef M_PI
@@ -285,8 +285,10 @@ __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
   GPURay ray = camera.get_ray(u, v);
   // END AI EDIT
   int pixel_idx = (y * width) + x;
+  // BEGIN AI EDIT: Fix reflection accumulation logic
   // 2. Initialize color accumulator and attenuation
-  float3 color = make_float3(0, 0, 0);
+  float3 final_color = make_float3(0, 0, 0);
+  float attenuation = 1.0f; // start at 1, decreases with each reflection
 
   // 3. Iterative ray bouncing (instead of recursion):
   for (int bounce = 0; bounce < max_bounces; bounce++) {
@@ -309,7 +311,15 @@ __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
 
     //  b. If no hit, add background color and break
     if (sphere_idx == -1) {
-      color = float3_ops::add(color, ambient_light);
+      // BEGIN AI EDIT: Use sky gradient like CPU version
+      float t_sky = 0.5f * (ray.direction.y + 1.0f);
+      float3 white = make_float3(1.0f, 1.0f, 1.0f);
+      float3 sky_blue = make_float3(0.5f, 0.7f, 1.0f);
+      float3 sky_color = float3_ops::lerp(white, sky_blue, t_sky);
+      final_color = float3_ops::add(
+          final_color,
+          float3_ops::mul(sky_color, attenuation));
+      // END AI EDIT
       break;
     }
 
@@ -319,18 +329,31 @@ __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
     float3 normal = spheres[sphere_idx].normal_at(hit);
     float3 view_dir =
         float3_ops::normalize(float3_ops::mul(ray.direction, -1.0f));
-    color = shade(hit, normal, spheres[sphere_idx].material, view_dir, hit,
+    float3 color = shade(hit, normal, spheres[sphere_idx].material, view_dir, hit,
                   spheres, num_spheres, sphere_idx, lights, num_lights);
+    
+    //  d. Accumulate color weighted by attenuation and reflectivity
+    float reflectivity = spheres[sphere_idx].material.metallic;
+    final_color = float3_ops::add(
+        final_color, 
+        float3_ops::mul(color, attenuation * (1.0f - reflectivity))
+    );
 
-    //  d. If reflective, setup ray for next bounce
-    if (spheres[sphere_idx].material.shininess > 0) {
-      //  e. Accumulate color with attenuation
-      // TODO:
+    // If not reflective, end
+    if (reflectivity <= 0.0f) {
+      break;
     }
-    break;
+    
+    //  e. If reflective, setup ray for next bounce
+    float3 reflected_dir = float3_ops::reflect(ray.direction, normal);
+    ray.origin = float3_ops::add(hit, float3_ops::mul(normal, EPSILON));
+    ray.direction = reflected_dir;
+    // Update attenuation for next bounce
+    attenuation *= reflectivity;
+    // END AI EDIT 
   }
   // 4. Store final color in framebuffer
-  framebuffer[pixel_idx] = color;
+  framebuffer[pixel_idx] = final_color;
 }
 
 // =========================================================
@@ -443,30 +466,30 @@ int main(int argc, char *argv[]) {
   std::cout << "Loading scene from: " << scene_file << "\n\n";
   SceneData scene_data = load_scene(scene_file);
   print_scene_info(scene_data);
-  
+
   // Convert CPU scene to GPU structures
   std::vector<GPUSphere> h_spheres;
   std::vector<GPULight> h_lights;
-  
+
   // Convert spheres
-  for (const auto& sphere : scene_data.scene.spheres) {
+  for (const auto &sphere : scene_data.scene.spheres) {
     GPUSphere gpu_sphere;
-    gpu_sphere.center = make_float3(sphere.center.x, sphere.center.y, sphere.center.z);
+    gpu_sphere.center =
+        make_float3(sphere.center.x, sphere.center.y, sphere.center.z);
     gpu_sphere.radius = sphere.radius;
-    gpu_sphere.material.albedo = make_float3(
-      sphere.material.color.x,
-      sphere.material.color.y,
-      sphere.material.color.z
-    );
+    gpu_sphere.material.albedo =
+        make_float3(sphere.material.color.x, sphere.material.color.y,
+                    sphere.material.color.z);
     gpu_sphere.material.metallic = sphere.material.reflectivity;
     gpu_sphere.material.shininess = sphere.material.shininess;
     h_spheres.push_back(gpu_sphere);
   }
-  
+
   // Convert lights
-  for (const auto& light : scene_data.scene.lights) {
+  for (const auto &light : scene_data.scene.lights) {
     GPULight gpu_light;
-    gpu_light.position = make_float3(light.position.x, light.position.y, light.position.z);
+    gpu_light.position =
+        make_float3(light.position.x, light.position.y, light.position.z);
     gpu_light.color = make_float3(light.color.x, light.color.y, light.color.z);
     gpu_light.intensity = light.intensity;
     h_lights.push_back(gpu_light);
@@ -497,18 +520,14 @@ int main(int argc, char *argv[]) {
   GPUCamera camera;
   if (scene_data.has_camera) {
     // Use camera from scene file
-    float3 lookfrom = make_float3(
-      scene_data.camera.position.x,
-      scene_data.camera.position.y,
-      scene_data.camera.position.z
-    );
-    float3 lookat = make_float3(
-      scene_data.camera.look_at.x,
-      scene_data.camera.look_at.y,
-      scene_data.camera.look_at.z
-    );
+    float3 lookfrom =
+        make_float3(scene_data.camera.position.x, scene_data.camera.position.y,
+                    scene_data.camera.position.z);
+    float3 lookat =
+        make_float3(scene_data.camera.look_at.x, scene_data.camera.look_at.y,
+                    scene_data.camera.look_at.z);
     float vfov = scene_data.camera.fov;
-    
+
     // Calculate camera basis
     float3 vup = make_float3(0, 1, 0);
     float aspect = float(width) / float(height);
