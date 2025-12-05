@@ -1,7 +1,7 @@
 #ifndef SCENE_H
 #define SCENE_H
 
-#include "math_constants.h"
+#include "ray_math_constants.h"
 #include "ray.h"
 #include "sphere.h"
 #include "vec3.h"

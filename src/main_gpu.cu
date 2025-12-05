@@ -2,7 +2,6 @@
 // CS420 Ray Tracer Project
 // Status: In Progress :)
 
-#include <chrono>
 #include <cmath>
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
@@ -10,6 +9,7 @@
 #include <iostream>
 #include <math_constants.h>
 #include <vector>
+#include "scene_loader.h"
 
 // Include math constants for cross-platform compatibility
 #ifndef M_PI
@@ -422,6 +422,13 @@ int main(int argc, char *argv[]) {
   const int height = 600;
   const int max_bounces = 3;
 
+  // BEGIN AI EDIT: Parse command-line arguments for scene file
+  std::string scene_file = "scenes/simple.txt";
+  if (argc > 1) {
+    scene_file = argv[1];
+  }
+  // END AI EDIT
+
   // CUDA device info
   int device;
   CUDA_CHECK(cudaGetDevice(&device));
@@ -432,36 +439,39 @@ int main(int argc, char *argv[]) {
   std::cout << "  Shared Memory per Block: " << props.sharedMemPerBlock
             << " bytes\n";
 
-  // Create scene data
+  // BEGIN AI EDIT: Load scene from file and convert to GPU structures
+  std::cout << "Loading scene from: " << scene_file << "\n\n";
+  SceneData scene_data = load_scene(scene_file);
+  print_scene_info(scene_data);
+  
+  // Convert CPU scene to GPU structures
   std::vector<GPUSphere> h_spheres;
   std::vector<GPULight> h_lights;
-
-  // ===== TODO: STUDENT - CREATE GPU SCENE =====
-  // Add spheres (aim for 50-100 for GPU testing)
-
-  // Example spheres
-  // BEGIN AI EDIT: Fix initialization syntax for GPUSphere
-  GPUSphere sphere1;
-  sphere1.center = make_float3(0, 0, -20);
-  sphere1.radius = 2.0f;
-  sphere1.material.albedo = make_float3(1, 0, 0);
-  sphere1.material.metallic = 0.0f;
-  sphere1.material.shininess = 10.0f;
-  h_spheres.push_back(sphere1);
-
-  GPUSphere sphere2;
-  sphere2.center = make_float3(3, 0, -20);
-  sphere2.radius = 2.0f;
-  sphere2.material.albedo = make_float3(0.8f, 0.8f, 0.8f);
-  sphere2.material.metallic = 0.8f;
-  sphere2.material.shininess = 100.0f;
-  h_spheres.push_back(sphere2);
+  
+  // Convert spheres
+  for (const auto& sphere : scene_data.scene.spheres) {
+    GPUSphere gpu_sphere;
+    gpu_sphere.center = make_float3(sphere.center.x, sphere.center.y, sphere.center.z);
+    gpu_sphere.radius = sphere.radius;
+    gpu_sphere.material.albedo = make_float3(
+      sphere.material.color.x,
+      sphere.material.color.y,
+      sphere.material.color.z
+    );
+    gpu_sphere.material.metallic = sphere.material.reflectivity;
+    gpu_sphere.material.shininess = sphere.material.shininess;
+    h_spheres.push_back(gpu_sphere);
+  }
+  
+  // Convert lights
+  for (const auto& light : scene_data.scene.lights) {
+    GPULight gpu_light;
+    gpu_light.position = make_float3(light.position.x, light.position.y, light.position.z);
+    gpu_light.color = make_float3(light.color.x, light.color.y, light.color.z);
+    gpu_light.intensity = light.intensity;
+    h_lights.push_back(gpu_light);
+  }
   // END AI EDIT
-
-  // TODO: Add many more spheres (use loops to create patterns)
-
-  // Lights
-  h_lights.push_back({make_float3(10, 10, -10), make_float3(1, 1, 1), 0.7f});
 
   std::cout << "Scene: " << h_spheres.size() << " spheres, " << h_lights.size()
             << " lights\n";
@@ -483,8 +493,51 @@ int main(int argc, char *argv[]) {
                         h_lights.size() * sizeof(GPULight),
                         cudaMemcpyHostToDevice));
 
-  // Setup camera
-  GPUCamera camera = setup_camera(width, height);
+  // BEGIN AI EDIT: Setup camera from loaded scene data
+  GPUCamera camera;
+  if (scene_data.has_camera) {
+    // Use camera from scene file
+    float3 lookfrom = make_float3(
+      scene_data.camera.position.x,
+      scene_data.camera.position.y,
+      scene_data.camera.position.z
+    );
+    float3 lookat = make_float3(
+      scene_data.camera.look_at.x,
+      scene_data.camera.look_at.y,
+      scene_data.camera.look_at.z
+    );
+    float vfov = scene_data.camera.fov;
+    
+    // Calculate camera basis
+    float3 vup = make_float3(0, 1, 0);
+    float aspect = float(width) / float(height);
+    float theta = vfov * M_PI / 180.0f;
+    float h = tanf(theta / 2.0f);
+    float viewport_height = 2.0f * h;
+    float viewport_width = aspect * viewport_height;
+    float focal_length = 1.0f;
+
+    float3 w = float3_ops::normalize(float3_ops::sub(lookfrom, lookat));
+    float3 u = float3_ops::normalize(make_float3(vup.y * w.z - vup.z * w.y,
+                                                 vup.z * w.x - vup.x * w.z,
+                                                 vup.x * w.y - vup.y * w.x));
+    float3 v = make_float3(w.y * u.z - w.z * u.y, w.z * u.x - w.x * u.z,
+                           w.x * u.y - w.y * u.x);
+
+    camera.origin = lookfrom;
+    camera.horizontal = float3_ops::mul(u, viewport_width);
+    camera.vertical = float3_ops::mul(v, viewport_height);
+    camera.lower_left = float3_ops::sub(
+        float3_ops::sub(
+            float3_ops::sub(lookfrom, float3_ops::mul(camera.horizontal, 0.5f)),
+            float3_ops::mul(camera.vertical, 0.5f)),
+        float3_ops::mul(w, focal_length));
+  } else {
+    // Fallback to default camera
+    camera = setup_camera(width, height);
+  }
+  // END AI EDIT
 
   // Configure kernel launch
   dim3 threads(16, 16);
