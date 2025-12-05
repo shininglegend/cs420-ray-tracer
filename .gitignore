@@ -2,6 +2,7 @@ output_*.ppm
 output_*.png
 ray_serial
 ray_openmp
+ray_cuda
 populi-files/*
 !populi-files/*.cpp
 .cache/*
