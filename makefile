@@ -51,35 +51,35 @@ benchmark2: serial openmp
 	OPENMP_TIME=$$(./ray_openmp scenes/simple.txt 2>&1 | grep -oP 'OpenMP time: \K[0-9.]+'); \
 	echo "Serial: $$SERIAL_TIME seconds"; \
 	echo "OpenMP: $$OPENMP_TIME seconds"; \
-	SPEEDUP=$$(echo "scale=2; $$SERIAL_TIME / $$OPENMP_TIME" | bc); \
+	SPEEDUP=$$(awk "BEGIN {printf \"%.2f\", $$SERIAL_TIME / $$OPENMP_TIME}"); \
 	echo "Speedup: $${SPEEDUP}x"
 	@mv output_serial.ppm output_simple_serial.ppm
 	@mv output_openmp.ppm output_simple_openmp.ppm
-	@convert output_simple_serial.ppm output_simple_serial.png
-	@convert output_simple_openmp.ppm output_simple_openmp.png
+# 	@convert output_simple_serial.ppm output_simple_serial.png
+# 	@convert output_simple_openmp.ppm output_simple_openmp.png
 	@echo ""
 	@echo "--- Medium Scene ---"
 	@SERIAL_TIME=$$(./ray_serial scenes/medium.txt 2>&1 | grep -oP 'Serial time: \K[0-9.]+'); \
 	OPENMP_TIME=$$(./ray_openmp scenes/medium.txt 2>&1 | grep -oP 'OpenMP time: \K[0-9.]+'); \
 	echo "Serial: $$SERIAL_TIME seconds"; \
 	echo "OpenMP: $$OPENMP_TIME seconds"; \
-	SPEEDUP=$$(echo "scale=2; $$SERIAL_TIME / $$OPENMP_TIME" | bc); \
+	SPEEDUP=$$(awk "BEGIN {printf \"%.2f\", $$SERIAL_TIME / $$OPENMP_TIME}"); \
 	echo "Speedup: $${SPEEDUP}x"
 	@mv output_serial.ppm output_medium_serial.ppm
 	@mv output_openmp.ppm output_medium_openmp.ppm
-	@convert output_medium_serial.ppm output_medium_serial.png
-	@convert output_medium_openmp.ppm output_medium_openmp.png
+# 	@convert output_medium_serial.ppm output_medium_serial.png
+# 	@convert output_medium_openmp.ppm output_medium_openmp.png
 	@echo ""
 	@echo "--- Complex Scene ---"
 	@SERIAL_TIME=$$(./ray_serial scenes/complex.txt 2>&1 | grep -oP 'Serial time: \K[0-9.]+'); \
 	OPENMP_TIME=$$(./ray_openmp scenes/complex.txt 2>&1 | grep -oP 'OpenMP time: \K[0-9.]+'); \
 	echo "Serial: $$SERIAL_TIME seconds"; \
 	echo "OpenMP: $$OPENMP_TIME seconds"; \
-	SPEEDUP=$$(echo "scale=2; $$SERIAL_TIME / $$OPENMP_TIME" | bc); \
+	SPEEDUP=$$(awk "BEGIN {printf \"%.2f\", $$SERIAL_TIME / $$OPENMP_TIME}"); \
 	echo "Speedup: $${SPEEDUP}x"
 	@mv output_serial.ppm output_complex_serial.ppm
 	@mv output_openmp.ppm output_complex_openmp.ppm
-	@convert output_complex_serial.ppm output_complex_serial.png
-	@convert output_complex_openmp.ppm output_complex_openmp.png
+# 	@convert output_complex_serial.ppm output_complex_serial.png
+# 	@convert output_complex_openmp.ppm output_complex_openmp.png
 	@echo ""
 	@echo "=== Benchmark Complete ==="
