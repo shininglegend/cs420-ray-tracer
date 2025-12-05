@@ -278,9 +278,10 @@ int main(int argc, char *argv[]) {
 // YOUR OPENMP CODE HERE
 // Hint: Use #pragma omp parallel for with appropriate scheduling
 // Dynamic will likely have best performance
-// Dynamic, complex: 0.7210 - warmed up (1.06 not)
-// Static, complex: 0.8974
-// Guided, 0.9118
+// Results after averaging 3 non-odd runs
+// Dynamic, complex: ~0.55
+// Static, complex: ~0.77
+// Guided, complex: ~0.85
 #pragma omp parallel for schedule(dynamic)
   for (int ij = 0; ij < (height * width); ij++) {
     int j = floor(double(ij) / width);
