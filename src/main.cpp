@@ -8,7 +8,7 @@
 #include <omp.h>
 #include <string>
 #include <vector>
-#include <math_constants.h>
+#include <ray_math_constants.h>
 #include "scene_loader.h"
 
 class Camera {

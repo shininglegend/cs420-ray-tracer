@@ -16,7 +16,7 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-// Constants
+// // Constants
 #ifndef EPSILON
 #define EPSILON 0.001
 #endif
@@ -37,42 +37,45 @@
 // =========================================================
 
 struct float3_ops {
-  __device__ static float3 make(float x, float y, float z) {
+  __host__ __device__ static float3 make(float x, float y, float z) {
     return make_float3(x, y, z);
   }
 
-  __device__ static float3 add(const float3 &a, const float3 &b) {
+  __host__ __device__ static float3 add(const float3 &a, const float3 &b) {
     return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
   }
 
-  __device__ static float3 sub(const float3 &a, const float3 &b) {
+  __host__ __device__ static float3 sub(const float3 &a, const float3 &b) {
     return make_float3(a.x - b.x, a.y - b.y, a.z - b.z);
   }
 
-  __device__ static float3 mul(const float3 &a, float t) {
+  __host__ __device__ static float3 mul(const float3 &a, float t) {
     return make_float3(a.x * t, a.y * t, a.z * t);
   }
 
-  __device__ static float3 mul(const float3 &a, const float3 &b) {
+  __host__ __device__ static float3 mul(const float3 &a, const float3 &b) {
     return make_float3(a.x * b.x, a.y * b.y, a.z * b.z);
   }
 
-  __device__ static float dot(const float3 &a, const float3 &b) {
+  __host__ __device__ static float dot(const float3 &a, const float3 &b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
   }
 
-  __device__ static float length(const float3 &v) { return sqrtf(dot(v, v)); }
+  __host__ __device__ static float length(const float3 &v) {
+    return sqrtf(dot(v, v));
+  }
 
-  __device__ static float3 normalize(const float3 &v) {
+  __host__ __device__ static float3 normalize(const float3 &v) {
     float len = length(v);
     return make_float3(v.x / len, v.y / len, v.z / len);
   }
 
-  __device__ static float3 reflect(const float3 &v, const float3 &n) {
+  __host__ __device__ static float3 reflect(const float3 &v, const float3 &n) {
     return sub(v, mul(n, 2.0f * dot(v, n)));
   }
 
-  __device__ static float3 lerp(const float3 &a, const float3 &b, float t) {
+  __host__ __device__ static float3 lerp(const float3 &a, const float3 &b,
+                                         float t) {
     return add(mul(a, 1.0f - t), mul(b, t));
   }
 };
@@ -255,10 +258,9 @@ __device__ float3 shade(const float3 &point, const float3 &normal,
     float3 specular = float3_ops::mul(
         float3_ops::mul(lights[light_idx].color, k_specular), spec_factor);
 
-    // Add it all together
-    color = float3_ops::mul(float3_ops::add(specular, diffuse), color);
-    return color;
+    color = float3_ops::add(color, float3_ops::add(diffuse, specular));
   }
+  return color;
 }
 
 // Render function
@@ -277,15 +279,20 @@ __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
   // STUDENT CODE HERE
   // Steps:
   // 1. Generate ray for this pixel
-  GPURay ray = camera.get_ray(x, y);
+  // BEGIN AI EDIT: Fix UV coordinates for proper camera ray generation
+  float u = float(x) / float(width);
+  float v = float(y) / float(height);
+  GPURay ray = camera.get_ray(u, v);
+  // END AI EDIT
   int pixel_idx = (y * width) + x;
   // 2. Initialize color accumulator and attenuation
-  float3 color;
-  float t = INFINITY;
-  int sphere_idx = -1;
+  float3 color = make_float3(0, 0, 0);
 
   // 3. Iterative ray bouncing (instead of recursion):
   for (int bounce = 0; bounce < max_bounces; bounce++) {
+    float t = INFINITY;
+    int sphere_idx = -1;
+
     //  a. Find intersection
     for (int curr_sphere_idx = 0; curr_sphere_idx < num_spheres;
          curr_sphere_idx++) {
@@ -297,31 +304,30 @@ __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
           sphere_idx = curr_sphere_idx;
           t = temp_t;
         }
-      } else {
-        //  b. If no hit, add background color and break
-        color = float3_ops::add(color, ambient_light);
-        framebuffer[pixel_idx] = color;
-        return;
       }
+    }
 
-      float3 hit =
-          float3_ops::add(ray.origin, (float3_ops::mul(ray.direction, t)));
-      //  c. Calculate shading (ambient + diffuse + specular)
-      // BEGIN AI EDIT: Add shade() call calculations
-      float3 normal = spheres[sphere_idx].normal_at(hit);
-      float3 view_dir =
-          float3_ops::normalize(float3_ops::mul(ray.direction, -1.0f));
-      // END AI EDIT
-      color = shade(hit, normal, spheres[sphere_idx].material, view_dir, hit,
-                    spheres, num_spheres, sphere_idx, lights, num_lights);
-
-      //  d. If reflective, setup ray for next bounce
-      if (spheres[sphere_idx].material.shininess > 0) {
-        //  e. Accumulate color with attenuation
-        // TODO:
-      }
+    //  b. If no hit, add background color and break
+    if (sphere_idx == -1) {
+      color = float3_ops::add(color, ambient_light);
       break;
     }
+
+    // AI EDIT: Fix hit point calculation
+    float3 hit = ray.at(t);
+    //  c. Calculate shading (ambient + diffuse + specular)
+    float3 normal = spheres[sphere_idx].normal_at(hit);
+    float3 view_dir =
+        float3_ops::normalize(float3_ops::mul(ray.direction, -1.0f));
+    color = shade(hit, normal, spheres[sphere_idx].material, view_dir, hit,
+                  spheres, num_spheres, sphere_idx, lights, num_lights);
+
+    //  d. If reflective, setup ray for next bounce
+    if (spheres[sphere_idx].material.shininess > 0) {
+      //  e. Accumulate color with attenuation
+      // TODO:
+    }
+    break;
   }
   // 4. Store final color in framebuffer
   framebuffer[pixel_idx] = color;
@@ -348,9 +354,11 @@ __global__ void render_kernel_optimized(float3 *framebuffer,
   // 3. __syncthreads()
   // 4. Use shared_spheres instead of global_spheres for intersection tests
 
-  // For now, just call the basic kernel logic
-  render_kernel(framebuffer, global_spheres, num_spheres, lights, num_lights,
-                camera, width, height, max_bounces);
+  // BEGIN AI EDIT: Can't call __global__ kernel from another kernel
+  // render_kernel(framebuffer, global_spheres, num_spheres, lights, num_lights,
+  //               camera, width, height, max_bounces);
+  // TODO: Implement shared memory optimization here
+  // END AI EDIT
 }
 
 // =========================================================
@@ -432,13 +440,23 @@ int main(int argc, char *argv[]) {
   // Add spheres (aim for 50-100 for GPU testing)
 
   // Example spheres
-  h_spheres.push_back({make_float3(0, 0, -20),
-                       2.0f,
-                       {make_float3(1, 0, 0), 0.0f, 1.0f, 10.0f}});
+  // BEGIN AI EDIT: Fix initialization syntax for GPUSphere
+  GPUSphere sphere1;
+  sphere1.center = make_float3(0, 0, -20);
+  sphere1.radius = 2.0f;
+  sphere1.material.albedo = make_float3(1, 0, 0);
+  sphere1.material.metallic = 0.0f;
+  sphere1.material.shininess = 10.0f;
+  h_spheres.push_back(sphere1);
 
-  h_spheres.push_back({make_float3(3, 0, -20),
-                       2.0f,
-                       {make_float3(0.8f, 0.8f, 0.8f), 0.8f, 0.2f, 100.0f}});
+  GPUSphere sphere2;
+  sphere2.center = make_float3(3, 0, -20);
+  sphere2.radius = 2.0f;
+  sphere2.material.albedo = make_float3(0.8f, 0.8f, 0.8f);
+  sphere2.material.metallic = 0.8f;
+  sphere2.material.shininess = 100.0f;
+  h_spheres.push_back(sphere2);
+  // END AI EDIT
 
   // TODO: Add many more spheres (use loops to create patterns)
 
