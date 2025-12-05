@@ -206,15 +206,23 @@ int main(int argc, char *argv[]) {
   const int height = 480;
   const int max_depth = 10;
 
+  // BEGIN EDIT: Parse --openmp flag
+  bool openmp_only = false;
+  std::string scene_file = "scenes/simple.txt";
+  
+  for (int i = 1; i < argc; i++) {
+    std::string arg = argv[i];
+    if (arg == "--openmp") {
+      openmp_only = true;
+    } else {
+      scene_file = arg;
+    }
+  }
+  // END EDIT
+
   // Create scene
   Scene scene;
     SceneData scene_data;
-    std::string scene_file = "scenes/simple.txt";
-    
-    // Allow command-line scene selection
-    if (argc > 1) {
-        scene_file = argv[1];
-    }
     
     std::cout << "Testing scene loader with: " << scene_file << "\n\n";
     // Load the scene
@@ -242,38 +250,44 @@ int main(int argc, char *argv[]) {
 
   // Framebuffer
   std::vector<Vec3> framebuffer(width * height);
-  std::cout << "Rendering (Serial)...\n";
 
   // Timing
   auto start = std::chrono::high_resolution_clock::now();
 
-  // SERIAL VERSION
-  for (int j = 0; j < height; j++) {
-    if (j % 50 == 0)
-      std::cout << "Row " << j << "/" << height << "\n";
+  // EDIT: Only run serial if not --openmp
+  if (!openmp_only) {
+    std::cout << "Rendering (Serial)...\n";
 
-    for (int i = 0; i < width; i++) {
-      double u = double(i) / (width - 1);
-      double v = double(j) / (height - 1);
+    // SERIAL VERSION
+    for (int j = 0; j < height; j++) {
+      if (j % 50 == 0)
+        std::cout << "Row " << j << "/" << height << "\n";
 
-      Ray ray = camera.get_ray(u, v);
-      framebuffer[j * width + i] = trace_ray(ray, scene, max_depth);
+      for (int i = 0; i < width; i++) {
+        double u = double(i) / (width - 1);
+        double v = double(j) / (height - 1);
+
+        Ray ray = camera.get_ray(u, v);
+        framebuffer[j * width + i] = trace_ray(ray, scene, max_depth);
+      }
     }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    std::cout << "Serial time: " << diff.count() << " seconds\n";
+
+    write_ppm("output_serial.ppm", framebuffer, width, height);
   }
 
-  auto end = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> diff = end - start;
-  std::cout << "Serial time: " << diff.count() << " seconds\n";
-
-  write_ppm("output_serial.ppm", framebuffer, width, height);
-
-// TODO: STUDENT - Add OpenMP version
+// STUDENT - Add OpenMP version
 // OPENMP VERSION
 #ifdef _OPENMP
   std::cout << "\nRendering (OpenMP)...\n";
   // Reset the framebugger
   std::vector<Vec3> framebuffermp(width * height);
-  start = std::chrono::high_resolution_clock::now();
+  // EDIT: declare own timing variables for OpenMP section
+  auto omp_start = std::chrono::high_resolution_clock::now();
+  // END EDIT
 
 // YOUR OPENMP CODE HERE
 // Hint: Use #pragma omp parallel for with appropriate scheduling
@@ -298,9 +312,9 @@ int main(int argc, char *argv[]) {
     framebuffermp[j * width + i] = trace_ray(ray, scene, max_depth);
   }
 
-  end = std::chrono::high_resolution_clock::now();
-  diff = end - start;
-  std::cout << "OpenMP time: " << diff.count() << " seconds\n";
+  auto omp_end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> omp_diff = omp_end - omp_start;
+  std::cout << "OpenMP time: " << omp_diff.count() << " seconds\n";
 
   write_ppm("output_openmp.ppm", framebuffermp, width, height);
 #endif

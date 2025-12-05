@@ -107,11 +107,17 @@ performance_test() {
     local openmp_time=""
     local cuda_time=""
     
-    if [ -f "ray_serial" ]; then
+    # BEGIN EDIT: Use ray_openmp for both to get fair comparison
+    if [ -f "ray_openmp" ]; then
+        echo -n "Serial (via ray_openmp): "
+        serial_time=$( { time -p ./ray_openmp > /dev/null 2>&1; } 2>&1 | grep real | awk '{print $2}')
+        echo "${serial_time}s"
+    elif [ -f "ray_serial" ]; then
         echo -n "Serial: "
         serial_time=$( { time -p ./ray_serial > /dev/null 2>&1; } 2>&1 | grep real | awk '{print $2}')
         echo "${serial_time}s"
     fi
+    # END EDIT
     
     if [ -f "ray_openmp" ]; then
         echo -n "OpenMP (4 threads): "
@@ -223,11 +229,15 @@ echo ""
 echo "========================================="
 echo "Test Summary:"
 
-# Count results
-PASSED=$(grep -c "PASSED" test_output.log 2>/dev/null || echo 0)
-FAILED=$(grep -c "FAILED" test_output.log 2>/dev/null || echo 0)
+# BEGIN EDIT: fix count logic - check if log exists and get single number
+if [ -f "test_output.log" ]; then
+    FAILED=$(grep -c "FAILED" test_output.log 2>/dev/null | head -1)
+else
+    FAILED=0
+fi
 
-if [ $FAILED -eq 0 ]; then
+if [ "$FAILED" -eq 0 ] 2>/dev/null; then
+# END EDIT
     echo -e "${GREEN}All tests passed!${NC}"
 else
     echo -e "${YELLOW}Some tests failed. Please review output above.${NC}"
