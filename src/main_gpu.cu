@@ -53,6 +53,10 @@ struct float3_ops {
     return make_float3(a.x * t, a.y * t, a.z * t);
   }
 
+  __device__ static float3 mul(const float3 &a, const float3 &b) {
+    return make_float3(a.x * b.x, a.y * b.y, a.z * b.z);
+  }
+
   __device__ static float dot(const float3 &a, const float3 &b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
   }
@@ -87,9 +91,9 @@ struct GPURay {
 // =========================================================
 
 struct GPUMaterial {
-  float3 albedo;
-  float metallic;
-  float roughness;
+  float3 albedo;  // Color
+  float metallic; // Reflectivity
+  // float roughness; // Ignored
   float shininess;
 };
 
@@ -186,7 +190,78 @@ struct GPUCamera {
 // - Use shared memory for frequently accessed data
 // - Be careful with memory access patterns
 // =========================================================
+// Consts
+__constant__ float3 ambient_light = {0.1f, 0.1f, 0.1f};
+__constant__ double k_specular = 0.5;
 
+// Helper functions
+__device__ bool in_shadow(const float3 &point, const GPULight &light,
+                          GPUSphere *spheres, int num_spheres) {
+  float3 to_light = float3_ops::sub(light.position, point);
+  float light_dist = float3_ops::length(to_light);
+  float3 light_dir = float3_ops::normalize(to_light);
+
+  GPURay shadow_ray;
+  shadow_ray.origin = point;
+  shadow_ray.direction = light_dir;
+
+  // Check if any sphere blocks the light
+  for (int i = 0; i < num_spheres; i++) {
+    float t;
+    if (spheres[i].intersect(shadow_ray, EPSILON, light_dist, t)) {
+      return true; // Something blocks the light
+    }
+  }
+  return false;
+}
+
+//  c. Calculate shading (ambient + diffuse + specular)
+__device__ float3 shade(const float3 &point, const float3 &normal,
+                        const GPUMaterial &mat, const float3 &view_dir,
+                        const float3 hit, GPUSphere *spheres, int num_spheres,
+                        int sphere_idx, GPULight *lights, int num_lights) {
+
+  // From shade function in scene.h
+  // Start with ambient lighting
+  float3 color =
+      float3_ops::mul(spheres[sphere_idx].material.albedo, ambient_light);
+
+  // For each light:
+  for (int light_idx = 0; light_idx < num_lights; light_idx++) {
+    // 1. Check if in shadow
+    if (in_shadow(hit, lights[light_idx], spheres, num_spheres)) {
+      // std::cout << "Skipping...";
+      continue;
+    }
+
+    // 2. Calculate diffuse component (Lambert)
+    float3 light_dir = float3_ops::normalize(
+        float3_ops::sub(lights[light_idx].position, point));
+    // BEGIN AI EDIT: Replace std::max with fmaxf for CUDA
+    float n_dot_l = fmaxf(0.0f, float3_ops::dot(normal, light_dir));
+    // END AI EDIT
+    // BEGIN AI EDIT: Fix diffuse - use (1 - reflectivity) not reflectivity
+    float3 diffuse = float3_ops::mul(
+        float3_ops::mul(mat.albedo, (1.0f - mat.metallic)), n_dot_l);
+    // END AI EDIT
+
+    // 3. Calculate specular component (Phong)
+    float3 reflect_dir =
+        float3_ops::reflect(float3_ops::mul(light_dir, -1.0f), normal);
+    // BEGIN AI EDIT: Replace std::max with fmaxf for CUDA
+    float r_dot_v = fmaxf(0.0f, float3_ops::dot(reflect_dir, view_dir));
+    // END AI EDIT
+    double spec_factor = pow(r_dot_v, mat.shininess);
+    float3 specular = float3_ops::mul(
+        float3_ops::mul(lights[light_idx].color, k_specular), spec_factor);
+
+    // Add it all together
+    color = float3_ops::mul(float3_ops::add(specular, diffuse), color);
+    return color;
+  }
+}
+
+// Render function
 __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
                               int num_spheres, GPULight *lights, int num_lights,
                               GPUCamera camera, int width, int height,
@@ -202,12 +277,13 @@ __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
   // STUDENT CODE HERE
   // Steps:
   // 1. Generate ray for this pixel
-  GPURay ray;
+  GPURay ray = camera.get_ray(x, y);
   int pixel_idx = (y * width) + x;
   // 2. Initialize color accumulator and attenuation
   float3 color;
   float t = INFINITY;
   int sphere_idx = -1;
+
   // 3. Iterative ray bouncing (instead of recursion):
   for (int bounce = 0; bounce < max_bounces; bounce++) {
     //  a. Find intersection
@@ -223,22 +299,32 @@ __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
         }
       } else {
         //  b. If no hit, add background color and break
-        color = float3_ops::add(color, make_float3(0.1f, 0.1f, 0.1f));
+        color = float3_ops::add(color, ambient_light);
         framebuffer[pixel_idx] = color;
         return;
       }
+
+      float3 hit =
+          float3_ops::add(ray.origin, (float3_ops::mul(ray.direction, t)));
       //  c. Calculate shading (ambient + diffuse + specular)
+      // BEGIN AI EDIT: Add shade() call calculations
+      float3 normal = spheres[sphere_idx].normal_at(hit);
+      float3 view_dir =
+          float3_ops::normalize(float3_ops::mul(ray.direction, -1.0f));
+      // END AI EDIT
+      color = shade(hit, normal, spheres[sphere_idx].material, view_dir, hit,
+                    spheres, num_spheres, sphere_idx, lights, num_lights);
 
       //  d. If reflective, setup ray for next bounce
       if (spheres[sphere_idx].material.shininess > 0) {
+        //  e. Accumulate color with attenuation
         // TODO:
       }
-      //  e. Accumulate color with attenuation
+      break;
     }
-    // 4. Store final color in framebuffer
-
-    // PLACEHOLDER - Just set to red for now
   }
+  // 4. Store final color in framebuffer
+  framebuffer[pixel_idx] = color;
 }
 
 // =========================================================
