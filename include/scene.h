@@ -19,7 +19,7 @@ public:
   std::vector<Light> lights;
   Vec3 ambient_light;
 
-  Scene() : ambient_light(0.1, 0.1, 0.1) {}
+  // Scene() : ambient_light(0.1, 0.1, 0.1) {}
 
   // TODO: Should this be read from somewhere?
   double k_specular = 0.5;

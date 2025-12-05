@@ -68,6 +68,17 @@ Week 1: Foundation (Serial + OpenMP) Plan:
 
 Key Principle: GET SERIAL WORKING FIRST!
 
+Week 2: GPU Checklist
+
+- [x] : GPU version renders correctly
+- [x] : Achieves 10× speedup over serial
+- [x] : No CUDA errors (cuda-memcheck clean)
+- [x] : Handles 100+ spheres
+- [x] : Shared memory implemented
+- [x] : Constant memory for lights/camera
+- [ ] : Profile shows good occupancy (Can't check)
+
+
 ### Complete UNIX Makefile Features
 
 The `Makefile_unix` provides everything you need:

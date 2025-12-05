@@ -230,7 +230,7 @@ int main(int argc, char *argv[]) {
     scene = scene_data.scene;
     
     // Print detailed info
-    print_scene_info(scene_data);
+    // print_scene_info(scene_data);
     
     // =========================================================================
     // Setup camera
@@ -260,8 +260,8 @@ int main(int argc, char *argv[]) {
 
     // SERIAL VERSION
     for (int j = 0; j < height; j++) {
-      if (j % 50 == 0)
-        std::cout << "Row " << j << "/" << height << "\n";
+      // if (j % 50 == 0)
+        // std::cout << "Row " << j << "/" << height << "\n";
 
       for (int i = 0; i < width; i++) {
         double u = double(i) / (width - 1);
@@ -303,8 +303,8 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < width; i++) {
       // std::cout << "ij: " << ij << ". j: " << j << "\n";
       
-      if (j % 50 == 0 && i == 0)
-        std::cout << "Row " << j << "/" << height << "\n";
+      // if (j % 50 == 0 && i == 0)
+        // std::cout << "Row " << j << "/" << height << "\n";
 
     double u = double(i) / (width - 1);
     double v = double(j) / (height - 1);

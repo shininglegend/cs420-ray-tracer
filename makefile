@@ -10,8 +10,8 @@ INCDIR = include
 
 # Add the include path to CXXFLAGS and CUDAFLAGS
 # The -I flag tells the compiler to look in $(INCDIR) for header files
-CXXFLAGS += -I$(INCDIR)
-CUDAFLAGS += -I$(INCDIR)
+CXXFLAGS += -I $(INCDIR)
+CUDAFLAGS += -I $(INCDIR)
 
 
 # Week 1 targets
@@ -21,7 +21,7 @@ serial: $(SRCDIR)/main.cpp
 openmp: $(SRCDIR)/main.cpp
 	$(CXX) $(CXXFLAGS) $(OMPFLAGS) -o ray_openmp $(SRCDIR)/main.cpp
 
-# Week 2 target (placeholder)
+# Week 2 target
 cuda: $(SRCDIR)/main_gpu.cu
 	$(NVCC) $(CUDAFLAGS) -o ray_cuda $(SRCDIR)/main_gpu.cu
 

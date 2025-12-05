@@ -33,13 +33,15 @@ extract_time() {
     grep -E "(time:|seconds)" | head -1 | grep -oE "[0-9]+\.[0-9]+"
 }
 
+# BEGIN AI EDIT: Replace bc with awk for calculations
 # Function to calculate pixels per second
 calc_pixels_per_second() {
     local time=$1
     local width=$2
     local height=$3
-    echo "scale=2; ($width * $height) / $time" | bc
+    echo "$width $height $time" | awk '{printf "%.0f", ($1 * $2) / $3}'
 }
+# END AI EDIT
 
 # Function to run a single benchmark
 run_benchmark() {
@@ -59,15 +61,17 @@ run_benchmark() {
     # Set thread count for OpenMP
     export OMP_NUM_THREADS=$threads
     
+    # BEGIN AI EDIT: Pass scene file argument to executables
     # Run and measure time
     start_time=$(date +%s.%N)
     if [ "$name" == "OpenMP" ]; then
-        timeout 60 ./$executable --openmp < /dev/null > temp_output.log 2>&1
+        timeout 60 ./$executable --openmp scenes/$scene < /dev/null > temp_output.log 2>&1
     else
-        timeout 60 ./$executable < /dev/null > temp_output.log 2>&1
+        timeout 60 ./$executable scenes/$scene < /dev/null > temp_output.log 2>&1
     fi
     exit_code=$?
     end_time=$(date +%s.%N)
+    # END AI EDIT
     
     if [ $exit_code -eq 124 ]; then
         echo -e "${RED}TIMEOUT${NC}"
@@ -79,8 +83,10 @@ run_benchmark() {
         return
     fi
     
+    # BEGIN AI EDIT: Use awk instead of bc for elapsed time calculation
     # Calculate elapsed time
-    elapsed=$(echo "$end_time - $start_time" | bc)
+    elapsed=$(echo "$end_time $start_time" | awk '{printf "%.3f", $1 - $2}')
+    # END AI EDIT
     
     # Get image dimensions (assuming 640x480 for simple, 800x600 for medium, 1280x720 for complex)
     case $scene in
@@ -236,6 +242,7 @@ echo ""
 echo "Speedup Analysis:"
 echo "-----------------"
 
+# BEGIN AI EDIT: Use awk instead of bc for speedup calculations
 # Function to calculate and display speedup
 calc_speedup() {
     local baseline_impl=$1
@@ -251,12 +258,13 @@ calc_speedup() {
               cut -d',' -f5 | awk '{sum+=$1; n++} END {if(n>0) print sum/n; else print 0}')
     
     if [ "$baseline" != "0" ] && [ "$compare" != "0" ]; then
-        speedup=$(echo "scale=2; $baseline / $compare" | bc)
+        speedup=$(echo "$baseline $compare" | awk '{printf "%.2f", $1 / $2}')
         echo "$speedup"
     else
         echo "N/A"
     fi
 }
+# END AI EDIT
 
 # Display speedups for medium scene
 echo "Speedups (Medium Scene):"
@@ -273,19 +281,22 @@ if [ -f "ray_hybrid" ]; then
     echo "  Hybrid vs CUDA:    ${hybrid_speedup}x"
 fi
 
+# BEGIN AI EDIT: Use awk for comparison instead of bc
 # Check if requirements are met
 echo ""
 echo "Requirement Verification:"
 echo "-------------------------"
 
-if (( $(echo "$omp_speedup >= 2.5" | bc -l) )); then
+omp_check=$(echo "$omp_speedup" | awk '{if($1 >= 2.5) print "PASS"; else print "FAIL"}')
+if [ "$omp_check" = "PASS" ]; then
     echo -e "  OpenMP speedup:  ${GREEN}✓ PASSED${NC} (${omp_speedup}x ≥ 2.5x)"
 else
     echo -e "  OpenMP speedup:  ${RED}✗ FAILED${NC} (${omp_speedup}x < 2.5x)"
 fi
 
 if [ -f "ray_cuda" ]; then
-    if (( $(echo "$cuda_speedup >= 10" | bc -l) )); then
+    cuda_check=$(echo "$cuda_speedup" | awk '{if($1 >= 10) print "PASS"; else print "FAIL"}')
+    if [ "$cuda_check" = "PASS" ]; then
         echo -e "  CUDA speedup:    ${GREEN}✓ PASSED${NC} (${cuda_speedup}x ≥ 10x)"
     else
         echo -e "  CUDA speedup:    ${RED}✗ FAILED${NC} (${cuda_speedup}x < 10x)"
@@ -293,12 +304,14 @@ if [ -f "ray_cuda" ]; then
 fi
 
 if [ -f "ray_hybrid" ]; then
-    if (( $(echo "$hybrid_speedup >= 1.2" | bc -l) )); then
+    hybrid_check=$(echo "$hybrid_speedup" | awk '{if($1 >= 1.2) print "PASS"; else print "FAIL"}')
+    if [ "$hybrid_check" = "PASS" ]; then
         echo -e "  Hybrid speedup:  ${GREEN}✓ PASSED${NC} (${hybrid_speedup}x ≥ 1.2x over GPU)"
     else
         echo -e "  Hybrid speedup:  ${RED}✗ FAILED${NC} (${hybrid_speedup}x < 1.2x over GPU)"
     fi
 fi
+# END AI EDIT
 
 # Save summary to file
 echo ""

@@ -112,11 +112,11 @@ struct GPUSphere {
     // 1. Calculate discriminant
     // From Ai: Use float3_ops instead of direct operators (C++ specific)
     float3 oc = float3_ops::sub(ray.origin, center);
-    double a = float3_ops::dot(ray.direction, ray.direction);
-    double b = 2.0 * float3_ops::dot(oc, ray.direction);
-    double c = float3_ops::dot(oc, oc) - radius * radius;
+    float a = float3_ops::dot(ray.direction, ray.direction);
+    float b = 2.0 * float3_ops::dot(oc, ray.direction);
+    float c = float3_ops::dot(oc, oc) - radius * radius;
 
-    double discriminant = b * b - 4 * a * c;
+    float discriminant = b * b - 4 * a * c;
 
     // 2. Check if discriminant >= 0
     if (discriminant < 0) {
@@ -126,13 +126,13 @@ struct GPUSphere {
     // 3. Calculate t values
     if (discriminant == 0) {
       // Only one root/intersection
-      double t0 = -b / (2 * a);
+      float t0 = -b / (2 * a);
       t = t0;
       return true;
     }
     // 4. Return smallest positive t (smallest root/closest intersection)
-    double t1 = (-b - sqrt(discriminant)) / (2 * a);
-    double t2 = (-b + sqrt(discriminant)) / (2 * a);
+    float t1 = (-b - sqrt(discriminant)) / (2 * a);
+    float t2 = (-b + sqrt(discriminant)) / (2 * a);
 
     // Using tmax and tmin is from Ai - I was confused as to why to use them
     // Check t1 first (smaller root)
@@ -196,6 +196,7 @@ struct GPUCamera {
 // Consts
 __constant__ float3 ambient_light = {0.1f, 0.1f, 0.1f};
 __constant__ double k_specular = 0.5;
+__constant__ GPULight const_lights[100]; // Set max 100
 
 // Helper functions
 __device__ bool in_shadow(const float3 &point, const GPULight &light,
@@ -222,7 +223,7 @@ __device__ bool in_shadow(const float3 &point, const GPULight &light,
 __device__ float3 shade(const float3 &point, const float3 &normal,
                         const GPUMaterial &mat, const float3 &view_dir,
                         const float3 hit, GPUSphere *spheres, int num_spheres,
-                        int sphere_idx, GPULight *lights, int num_lights) {
+                        int sphere_idx, int num_lights) {
 
   // From shade function in scene.h
   // Start with ambient lighting
@@ -232,14 +233,14 @@ __device__ float3 shade(const float3 &point, const float3 &normal,
   // For each light:
   for (int light_idx = 0; light_idx < num_lights; light_idx++) {
     // 1. Check if in shadow
-    if (in_shadow(hit, lights[light_idx], spheres, num_spheres)) {
+    if (in_shadow(hit, const_lights[light_idx], spheres, num_spheres)) {
       // std::cout << "Skipping...";
       continue;
     }
 
     // 2. Calculate diffuse component (Lambert)
     float3 light_dir = float3_ops::normalize(
-        float3_ops::sub(lights[light_idx].position, point));
+        float3_ops::sub(const_lights[light_idx].position, point));
     // BEGIN AI EDIT: Replace std::max with fmaxf for CUDA
     float n_dot_l = fmaxf(0.0f, float3_ops::dot(normal, light_dir));
     // END AI EDIT
@@ -256,7 +257,8 @@ __device__ float3 shade(const float3 &point, const float3 &normal,
     // END AI EDIT
     double spec_factor = pow(r_dot_v, mat.shininess);
     float3 specular = float3_ops::mul(
-        float3_ops::mul(lights[light_idx].color, k_specular), spec_factor);
+        float3_ops::mul(const_lights[light_idx].color, k_specular),
+        spec_factor);
 
     color = float3_ops::add(color, float3_ops::add(diffuse, specular));
   }
@@ -265,9 +267,8 @@ __device__ float3 shade(const float3 &point, const float3 &normal,
 
 // Render function
 __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
-                              int num_spheres, GPULight *lights, int num_lights,
-                              GPUCamera camera, int width, int height,
-                              int max_bounces) {
+                              int num_spheres, int num_lights, GPUCamera camera,
+                              int width, int height, int max_bounces) {
 
   // Calculate pixel coordinates
   int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -316,9 +317,8 @@ __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
       float3 white = make_float3(1.0f, 1.0f, 1.0f);
       float3 sky_blue = make_float3(0.5f, 0.7f, 1.0f);
       float3 sky_color = float3_ops::lerp(white, sky_blue, t_sky);
-      final_color = float3_ops::add(
-          final_color,
-          float3_ops::mul(sky_color, attenuation));
+      final_color =
+          float3_ops::add(final_color, float3_ops::mul(sky_color, attenuation));
       // END AI EDIT
       break;
     }
@@ -329,28 +329,27 @@ __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
     float3 normal = spheres[sphere_idx].normal_at(hit);
     float3 view_dir =
         float3_ops::normalize(float3_ops::mul(ray.direction, -1.0f));
-    float3 color = shade(hit, normal, spheres[sphere_idx].material, view_dir, hit,
-                  spheres, num_spheres, sphere_idx, lights, num_lights);
-    
+    float3 color = shade(hit, normal, spheres[sphere_idx].material, view_dir,
+                         hit, spheres, num_spheres, sphere_idx, num_lights);
+
     //  d. Accumulate color weighted by attenuation and reflectivity
     float reflectivity = spheres[sphere_idx].material.metallic;
     final_color = float3_ops::add(
-        final_color, 
-        float3_ops::mul(color, attenuation * (1.0f - reflectivity))
-    );
+        final_color,
+        float3_ops::mul(color, attenuation * (1.0f - reflectivity)));
 
-    // If not reflective, end
-    if (reflectivity <= 0.0f) {
+    // If not reflective or attenuation neligible, end
+    if (reflectivity <= 0.0f || attenuation < 0.0f) {
       break;
     }
-    
+
     //  e. If reflective, setup ray for next bounce
     float3 reflected_dir = float3_ops::reflect(ray.direction, normal);
     ray.origin = float3_ops::add(hit, float3_ops::mul(normal, EPSILON));
     ray.direction = reflected_dir;
     // Update attenuation for next bounce
     attenuation *= reflectivity;
-    // END AI EDIT 
+    // END AI EDIT
   }
   // 4. Store final color in framebuffer
   framebuffer[pixel_idx] = final_color;
@@ -365,23 +364,110 @@ __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
 
 __global__ void render_kernel_optimized(float3 *framebuffer,
                                         GPUSphere *global_spheres,
-                                        int num_spheres, GPULight *lights,
-                                        int num_lights, GPUCamera camera,
-                                        int width, int height,
+                                        int num_spheres, int num_lights,
+                                        GPUCamera camera, int width, int height,
                                         int max_bounces) {
 
   // TODO: STUDENT CODE HERE
   // 1. Declare shared memory for spheres
-  //    extern __shared__ GPUSphere shared_spheres[];
+  extern __shared__ GPUSphere shared_spheres[];
   // 2. Cooperatively load spheres into shared memory
-  // 3. __syncthreads()
-  // 4. Use shared_spheres instead of global_spheres for intersection tests
+  int tid =
+      threadIdx.y * blockDim.x + threadIdx.x; // Flattened thread ID (from AI
+  if (tid <= num_spheres) {
+    shared_spheres[tid] = global_spheres[tid];
+  }
 
-  // BEGIN AI EDIT: Can't call __global__ kernel from another kernel
-  // render_kernel(framebuffer, global_spheres, num_spheres, lights, num_lights,
-  //               camera, width, height, max_bounces);
-  // TODO: Implement shared memory optimization here
-  // END AI EDIT
+  // 3. sync
+  __syncthreads();
+
+  // 4. Use shared_spheres instead of global_spheres for intersection tests
+  // NOTE: Code copied from above and edited
+
+  // Calculate pixel coordinates
+  int x = blockIdx.x * blockDim.x + threadIdx.x;
+  int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+  if (x >= width || y >= height)
+    return;
+
+  // Steps:
+  // 1. Generate ray for this pixel
+  // AI EDIT: Fix UV coordinates for proper camera ray generation
+  float u = float(x) / float(width);
+  float v = float(y) / float(height);
+  GPURay ray = camera.get_ray(u, v);
+
+  int pixel_idx = (y * width) + x;
+  // BEGIN AI EDIT: Fix reflection accumulation logic
+  // 2. Initialize color accumulator and attenuation
+  float3 final_color = make_float3(0, 0, 0);
+  float attenuation = 1.0f; // start at 1, decreases with each reflection
+
+  // 3. Iterative ray bouncing (instead of recursion):
+  for (int bounce = 0; bounce < max_bounces; bounce++) {
+    float t = INFINITY;
+    int sphere_idx = -1;
+
+    //  a. Find intersection
+    for (int curr_sphere_idx = 0; curr_sphere_idx < num_spheres;
+         curr_sphere_idx++) {
+      float temp_t = 0;
+      // If an intersection, and smallest t, save it.
+      // TODO: are t_min and t_max set right?
+      if (shared_spheres[curr_sphere_idx].intersect(ray, EPSILON, INFINITY,
+                                                    temp_t)) {
+        if (temp_t < t) {
+          sphere_idx = curr_sphere_idx;
+          t = temp_t;
+        }
+      }
+    }
+
+    //  b. If no hit, add background color and break
+    if (sphere_idx == -1) {
+      // BEGIN AI EDIT: Use sky gradient like CPU version
+      float t_sky = 0.5f * (ray.direction.y + 1.0f);
+      float3 white = make_float3(1.0f, 1.0f, 1.0f);
+      float3 sky_blue = make_float3(0.5f, 0.7f, 1.0f);
+      float3 sky_color = float3_ops::lerp(white, sky_blue, t_sky);
+      final_color =
+          float3_ops::add(final_color, float3_ops::mul(sky_color, attenuation));
+      // END AI EDIT
+      break;
+    }
+
+    // AI EDIT: Fix hit point calculation
+    float3 hit = ray.at(t);
+    //  c. Calculate shading (ambient + diffuse + specular)
+    float3 normal = shared_spheres[sphere_idx].normal_at(hit);
+    float3 view_dir =
+        float3_ops::normalize(float3_ops::mul(ray.direction, -1.0f));
+    float3 color =
+        shade(hit, normal, shared_spheres[sphere_idx].material, view_dir, hit,
+              shared_spheres, num_spheres, sphere_idx, num_lights);
+
+    //  d. Accumulate color weighted by attenuation and reflectivity
+    float reflectivity = shared_spheres[sphere_idx].material.metallic;
+    final_color = float3_ops::add(
+        final_color,
+        float3_ops::mul(color, attenuation * (1.0f - reflectivity)));
+
+    // If not reflective, end
+    if (reflectivity <= 0.0f) {
+      break;
+    }
+
+    //  e. If reflective, setup ray for next bounce
+    float3 reflected_dir = float3_ops::reflect(ray.direction, normal);
+    ray.origin = float3_ops::add(hit, float3_ops::mul(normal, EPSILON));
+    ray.direction = reflected_dir;
+    // Update attenuation for next bounce
+    attenuation *= reflectivity;
+    // END AI EDIT
+  }
+  // 4. Store final color in framebuffer
+  framebuffer[pixel_idx] = final_color;
 }
 
 // =========================================================
@@ -441,9 +527,9 @@ GPUCamera setup_camera(int width, int height) {
 
 int main(int argc, char *argv[]) {
   // Image settings
-  const int width = 800;
-  const int height = 600;
-  const int max_bounces = 3;
+  const int width = 640;
+  const int height = 480;
+  const int max_bounces = 10;
 
   // BEGIN AI EDIT: Parse command-line arguments for scene file
   std::string scene_file = "scenes/simple.txt";
@@ -465,7 +551,7 @@ int main(int argc, char *argv[]) {
   // BEGIN AI EDIT: Load scene from file and convert to GPU structures
   std::cout << "Loading scene from: " << scene_file << "\n\n";
   SceneData scene_data = load_scene(scene_file);
-  print_scene_info(scene_data);
+  // print_scene_info(scene_data);
 
   // Convert CPU scene to GPU structures
   std::vector<GPUSphere> h_spheres;
@@ -486,6 +572,12 @@ int main(int argc, char *argv[]) {
   }
 
   // Convert lights
+  if (scene_data.scene.lights.size() > 100) {
+    std::cerr << "Error: Scene has " << scene_data.scene.lights.size() 
+              << " lights, but maximum is 100\n";
+    return 1;
+  }
+
   for (const auto &light : scene_data.scene.lights) {
     GPULight gpu_light;
     gpu_light.position =
@@ -501,20 +593,17 @@ int main(int argc, char *argv[]) {
 
   // Allocate device memory
   GPUSphere *d_spheres;
-  GPULight *d_lights;
   float3 *d_framebuffer;
 
   CUDA_CHECK(cudaMalloc(&d_spheres, h_spheres.size() * sizeof(GPUSphere)));
-  CUDA_CHECK(cudaMalloc(&d_lights, h_lights.size() * sizeof(GPULight)));
   CUDA_CHECK(cudaMalloc(&d_framebuffer, width * height * sizeof(float3)));
 
   // Copy scene to device
   CUDA_CHECK(cudaMemcpy(d_spheres, h_spheres.data(),
                         h_spheres.size() * sizeof(GPUSphere),
                         cudaMemcpyHostToDevice));
-  CUDA_CHECK(cudaMemcpy(d_lights, h_lights.data(),
-                        h_lights.size() * sizeof(GPULight),
-                        cudaMemcpyHostToDevice));
+  CUDA_CHECK(cudaMemcpyToSymbol(const_lights, h_lights.data(),
+                                h_lights.size() * sizeof(GPULight)));
 
   // BEGIN AI EDIT: Setup camera from loaded scene data
   GPUCamera camera;
@@ -578,13 +667,16 @@ int main(int argc, char *argv[]) {
   // ===== TODO: STUDENT - CHOOSE KERNEL VERSION =====
   // Start with basic kernel, then implement and test optimized version
 
-  render_kernel<<<blocks, threads>>>(d_framebuffer, d_spheres, h_spheres.size(),
-                                     d_lights, h_lights.size(), camera, width,
-                                     height, max_bounces);
+  // render_kernel<<<blocks, threads>>>(d_framebuffer, d_spheres,
+  // h_spheres.size(),
+  //                                    d_lights, h_lights.size(), camera,
+  //                                    width, height, max_bounces);
 
   // For optimized version with shared memory:
-  // size_t shared_size = h_spheres.size() * sizeof(GPUSphere);
-  // render_kernel_optimized<<<blocks, threads, shared_size>>>(...);
+  size_t shared_size = h_spheres.size() * sizeof(GPUSphere);
+  render_kernel_optimized<<<blocks, threads, shared_size>>>(
+      d_framebuffer, d_spheres, h_spheres.size(), h_lights.size(),
+      camera, width, height, max_bounces);
 
   CUDA_CHECK(cudaEventRecord(stop));
   CUDA_CHECK(cudaEventSynchronize(stop));
@@ -604,7 +696,7 @@ int main(int argc, char *argv[]) {
 
   // Cleanup
   CUDA_CHECK(cudaFree(d_spheres));
-  CUDA_CHECK(cudaFree(d_lights));
+  // CUDA_CHECK(cudaFree(d_lights));
   CUDA_CHECK(cudaFree(d_framebuffer));
   CUDA_CHECK(cudaEventDestroy(start));
   CUDA_CHECK(cudaEventDestroy(stop));

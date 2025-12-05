@@ -124,17 +124,20 @@ performance_test() {
         openmp_time=$( { time -p OMP_NUM_THREADS=4 ./ray_openmp --openmp > /dev/null 2>&1; } 2>&1 | grep real | awk '{print $2}')
         echo "${openmp_time}s"
         
+        # BEGIN AI EDIT: Use awk instead of bc for speedup calculation
         if [ -n "$serial_time" ] && [ -n "$openmp_time" ]; then
-            speedup=$(echo "scale=2; $serial_time / $openmp_time" | bc)
+            speedup=$(echo "$serial_time $openmp_time" | awk '{printf "%.2f", $1 / $2}')
             echo "  Speedup: ${speedup}x"
             
             # Check if speedup meets requirement
-            if (( $(echo "$speedup >= 2.5" | bc -l) )); then
+            meets_req=$(echo "$speedup" | awk '{if($1 >= 2.5) print "yes"; else print "no"}')
+            if [ "$meets_req" = "yes" ]; then
                 echo -e "  ${GREEN}✓ Meets 2.5x requirement${NC}"
             else
                 echo -e "  ${YELLOW}⚠ Below 2.5x requirement${NC}"
             fi
         fi
+        # END AI EDIT
     fi
     
     if [ -f "ray_cuda" ]; then
@@ -142,17 +145,20 @@ performance_test() {
         cuda_time=$( { time -p ./ray_cuda > /dev/null 2>&1; } 2>&1 | grep real | awk '{print $2}')
         echo "${cuda_time}s"
         
+        # BEGIN AI EDIT: Use awk instead of bc for speedup calculation
         if [ -n "$serial_time" ] && [ -n "$cuda_time" ]; then
-            speedup=$(echo "scale=2; $serial_time / $cuda_time" | bc)
+            speedup=$(echo "$serial_time $cuda_time" | awk '{printf "%.2f", $1 / $2}')
             echo "  Speedup: ${speedup}x"
             
             # Check if speedup meets requirement
-            if (( $(echo "$speedup >= 10" | bc -l) )); then
+            meets_req=$(echo "$speedup" | awk '{if($1 >= 10) print "yes"; else print "no"}')
+            if [ "$meets_req" = "yes" ]; then
                 echo -e "  ${GREEN}✓ Meets 10x requirement${NC}"
             else
                 echo -e "  ${YELLOW}⚠ Below 10x requirement${NC}"
             fi
         fi
+        # END AI EDIT
     fi
 }
 
@@ -204,6 +210,7 @@ case $TEST_TYPE in
         run_test "OpenMP Implementation" "ray_openmp" "--openmp" "output_openmp.ppm"
         run_test "CUDA Implementation" "ray_cuda" "" "output_gpu.ppm"
         
+        # BEGIN AI EDIT: Add CUDA output comparison
         echo ""
         echo "Image Comparison:"
         echo "-----------------"
@@ -215,6 +222,16 @@ case $TEST_TYPE in
                 echo -e "  ${YELLOW}⚠ Serial and OpenMP outputs differ${NC}"
             fi
         fi
+        
+        if [ -f "output_serial.ppm" ] && [ -f "output_gpu.ppm" ]; then
+            compare_images "output_serial.ppm" "output_gpu.ppm"
+            if [ $? -eq 0 ]; then
+                echo -e "  ${GREEN}✓ Serial and CUDA outputs match${NC}"
+            else
+                echo -e "  ${YELLOW}⚠ Serial and CUDA outputs differ${NC}"
+            fi
+        fi
+        # END AI EDIT
         
         performance_test
         memory_check
