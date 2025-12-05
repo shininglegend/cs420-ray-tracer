@@ -11,8 +11,15 @@
         "algorithm": "cpp"
     },
     "C_Cpp.default.includePath": [
-        "${workspaceFolder}/include"
+        "${workspaceFolder}/include",
+        "/usr/local/cuda/include",
+        "/usr/include"
     ],
     "C_Cpp.default.compilerPath": "/usr/bin/g++",
-    "C_Cpp.default.cppStandard": "c++11"
+    "C_Cpp.default.cppStandard": "c++11",
+    "C_Cpp.default.defines": [
+        "__CUDACC__",
+        "__CUDA_ARCH__"
+    ],
+    "C_Cpp.errorSquiggles": "enabled"
 }
