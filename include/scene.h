@@ -58,15 +58,14 @@ public:
     double light_distance = to_light.length();
     Vec3 light_dir = to_light.normalized();
 
-    // Cast shadow ray (no offset - use epsilon in comparison instead)
-    Ray shadow_ray(point, light_dir);
+    // BEGIN AI EDIT: Offset shadow ray origin to avoid self-intersection (fixes speckling)
+    Ray shadow_ray(point + light_dir * EPSILON, light_dir);
+    // END AI EDIT
 
     double t;
     int sphere_idx;
     if (find_intersection(shadow_ray, t, sphere_idx)) {
-      // Check if intersection is beyond epsilon (avoid self-intersection) and
-      // before light
-      return t > EPSILON && t < light_distance;
+      return t < light_distance;
     }
     // END AI EDIT
     return false;
@@ -90,7 +89,9 @@ public:
       // 2. Calculate diffuse component (Lambert)
       Vec3 light_dir = (lights[light_idx].position - point).normalized();
       double n_dot_l = std::max(0.0, dot(normal, light_dir));
-      Vec3 diffuse = mat.color * mat.reflectivity * n_dot_l;
+      // BEGIN AI EDIT: Fix diffuse - use (1 - reflectivity) not reflectivity
+      Vec3 diffuse = mat.color * (1.0 - mat.reflectivity) * n_dot_l;
+      // END AI EDIT
 
       // 3. Calculate specular component (Phong)
       Vec3 reflect_dir = reflect(light_dir * -1, normal); // old

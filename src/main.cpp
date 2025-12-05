@@ -66,7 +66,9 @@ Vec3 trace_ray(const Ray &ray, const Scene &scene, int depth) {
   if (scene.spheres[sphere_idx].material.reflectivity > 0) {
     // BEGIN AI EDIT: Implement recursive reflection
     Vec3 reflected_dir = ray.direction - norm * 2.0 * dot(ray.direction, norm);
-    Ray reflected_ray(hit, reflected_dir);
+    // BEGIN AI EDIT: Offset reflection ray origin to avoid self-intersection (fixes speckling)
+    Ray reflected_ray(hit + norm * EPSILON, reflected_dir);
+    // END AI EDIT
     Vec3 reflected_color = trace_ray(reflected_ray, scene, depth - 1);
 
     double refl = scene.spheres[sphere_idx].material.reflectivity;
@@ -202,7 +204,7 @@ int main(int argc, char *argv[]) {
   // Image settings
   const int width = 640;
   const int height = 480;
-  const int max_depth = 3;
+  const int max_depth = 10;
 
   // Create scene
   Scene scene;
@@ -291,7 +293,7 @@ int main(int argc, char *argv[]) {
     double u = double(i) / (width - 1);
     double v = double(j) / (height - 1);
 
-    Ray ray = camera->get_ray(u, v);
+    Ray ray = camera.get_ray(u, v);
     framebuffermp[j * width + i] = trace_ray(ray, scene, max_depth);
   }
 

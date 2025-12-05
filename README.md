@@ -137,3 +137,7 @@ You have a complete, clean UNIX package that:
 The `Makefile_unix` is production-ready and handles all edge cases including CUDA detection, proper dependency tracking, and multiple build configurations.
 
 Use `make help` for complete command reference.
+
+### My Notes
+Complex: `make clean && rm output_serial.png && rm output_openmp.png && make openmp && ./ray_openmp ./scenes/complex.txt && convert output_openmp.ppm output_openmp.png && convert output_serial.ppm output_serial.png`
+Simple: `make clean && rm output_serial.png && rm output_openmp.png && make openmp && ./ray_openmp ./scenes/complex.txt && convert output_openmp.ppm output_openmp.png && convert output_serial.ppm output_serial.png`
