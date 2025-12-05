@@ -296,20 +296,22 @@ int main(int argc, char *argv[]) {
 // Dynamic, complex: ~0.55
 // Static, complex: ~0.77
 // Guided, complex: ~0.85
-#pragma omp parallel for schedule(dynamic)
-  for (int ij = 0; ij < (height * width); ij++) {
-    int j = floor(double(ij) / width);
-    int i = ij % width;
-    // std::cout << "ij: " << ij << ". j: " << j << "\n";
-
-    if (j % 50 == 0 && i == 0)
-      std::cout << "Row " << j << "/" << height << "\n";
+// Collapse idea was from claude, I had combined the loop to ij - 
+// then was manually calculating i and j from ij 
+#pragma omp parallel for schedule(dynamic) collapse(2)
+  for (int j = 0; j < height; j++) {
+    for (int i = 0; i < width; i++) {
+      // std::cout << "ij: " << ij << ". j: " << j << "\n";
+      
+      if (j % 50 == 0 && i == 0)
+        std::cout << "Row " << j << "/" << height << "\n";
 
     double u = double(i) / (width - 1);
     double v = double(j) / (height - 1);
 
     Ray ray = camera.get_ray(u, v);
     framebuffermp[j * width + i] = trace_ray(ray, scene, max_depth);
+    }
   }
 
   auto omp_end = std::chrono::high_resolution_clock::now();
