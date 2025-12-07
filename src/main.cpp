@@ -99,10 +99,11 @@ void write_ppm(const std::string &filename,
       auto r = color.x;
       auto g = color.y;
       auto b = color.z;
-      // Apply a linear to gamma transform for gamma 2
-      r = linear_to_gamma(r);
-      g = linear_to_gamma(g);
-      b = linear_to_gamma(b);
+      // BEGIN AI EDIT: Remove gamma correction to match GPU version
+      // r = linear_to_gamma(r);
+      // g = linear_to_gamma(g);
+      // b = linear_to_gamma(b);
+      // END AI EDIT
       r = int(255.99 * std::min(1.0, r));
       g = int(255.99 * std::min(1.0, g));
       b = int(255.99 * std::min(1.0, b));

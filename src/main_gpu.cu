@@ -168,12 +168,26 @@ struct GPUCamera {
   float3 lower_left;
   float3 horizontal;
   float3 vertical;
+  // AI EDIT: Add fields to match CPU camera implementation
+  float3 forward;
+  float3 right;
+  float3 up;
+  float fov;
+  // END AI EDIT
 
   __device__ GPURay get_ray(float u, float v) const {
+    // AI EDIT: Match CPU camera ray generation exactly
+    float aspect = 1.0f;
+    float scale = tanf(fov * 0.5f * M_PI / 180.0f);
+    
     float3 direction = float3_ops::add(
-        lower_left, float3_ops::add(float3_ops::mul(horizontal, u),
-                                    float3_ops::mul(vertical, v)));
-    direction = float3_ops::sub(direction, origin);
+        forward,
+        float3_ops::add(
+            float3_ops::mul(right, (u - 0.5f) * scale * aspect),
+            float3_ops::mul(up, (v - 0.5f) * scale)
+        )
+    );
+    // END AI EDIT
 
     GPURay ray;
     ray.origin = origin;
@@ -278,8 +292,8 @@ __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
   // Steps:
   // 1. Generate ray for this pixel
   // BEGIN AI EDIT: Fix UV coordinates for proper camera ray generation
-  float u = float(x) / float(width);
-  float v = float(y) / float(height);
+  float u = float(x) / float(width - 1);
+  float v = float(y) / float(height - 1);
   GPURay ray = camera.get_ray(u, v);
   // END AI EDIT
   int pixel_idx = (y * width) + x;
@@ -390,8 +404,8 @@ __global__ void render_kernel_optimized(float3 *framebuffer,
   // Steps:
   // 1. Generate ray for this pixel
   // AI EDIT: Fix UV coordinates for proper camera ray generation
-  float u = float(x) / float(width);
-  float v = float(y) / float(height);
+  float u = float(x) / float(width - 1);
+  float v = float(y) / float(height - 1);
   GPURay ray = camera.get_ray(u, v);
 
   int pixel_idx = (y * width) + x;
@@ -490,33 +504,31 @@ GPUCamera setup_camera(int width, int height) {
   // Camera parameters
   float3 lookfrom = make_float3(0, 2, 5);
   float3 lookat = make_float3(0, 0, -20);
-  float3 vup = make_float3(0, 1, 0);
   float vfov = 60.0f;
-  float aspect = float(width) / float(height);
 
-  // Calculate camera basis
-  float theta = vfov * M_PI / 180.0f;
-  float h = tanf(theta / 2.0f);
-  float viewport_height = 2.0f * h;
-  float viewport_width = aspect * viewport_height;
-  float focal_length = 1.0f;
-
-  float3 w = float3_ops::normalize(float3_ops::sub(lookfrom, lookat));
-  float3 u = float3_ops::normalize(make_float3(vup.y * w.z - vup.z * w.y,
-                                               vup.z * w.x - vup.x * w.z,
-                                               vup.x * w.y - vup.y * w.x));
-  float3 v = make_float3(w.y * u.z - w.z * u.y, w.z * u.x - w.x * u.z,
-                         w.x * u.y - w.y * u.x);
-
+  // AI EDIT: Match CPU camera setup exactly
   GPUCamera camera;
   camera.origin = lookfrom;
-  camera.horizontal = float3_ops::mul(u, viewport_width);
-  camera.vertical = float3_ops::mul(v, viewport_height);
-  camera.lower_left = float3_ops::sub(
-      float3_ops::sub(
-          float3_ops::sub(lookfrom, float3_ops::mul(camera.horizontal, 0.5f)),
-          float3_ops::mul(camera.vertical, 0.5f)),
-      float3_ops::mul(w, focal_length));
+  camera.fov = vfov;
+  
+  // Calculate basis vectors like CPU version
+  camera.forward = float3_ops::normalize(float3_ops::sub(lookat, lookfrom));
+  float3 world_up = make_float3(0, 1, 0);
+  
+  // right = cross(forward, world_up)
+  camera.right = float3_ops::normalize(make_float3(
+      camera.forward.y * world_up.z - camera.forward.z * world_up.y,
+      camera.forward.z * world_up.x - camera.forward.x * world_up.z,
+      camera.forward.x * world_up.y - camera.forward.y * world_up.x
+  ));
+  
+  // up = cross(right, forward)
+  camera.up = make_float3(
+      camera.right.y * camera.forward.z - camera.right.z * camera.forward.y,
+      camera.right.z * camera.forward.x - camera.right.x * camera.forward.z,
+      camera.right.x * camera.forward.y - camera.right.y * camera.forward.x
+  );
+  // END AI EDIT
 
   return camera;
 }
@@ -613,30 +625,28 @@ int main(int argc, char *argv[]) {
                     scene_data.camera.look_at.z);
     float vfov = scene_data.camera.fov;
 
-    // Calculate camera basis
-    float3 vup = make_float3(0, 1, 0);
-    float aspect = float(width) / float(height);
-    float theta = vfov * M_PI / 180.0f;
-    float h = tanf(theta / 2.0f);
-    float viewport_height = 2.0f * h;
-    float viewport_width = aspect * viewport_height;
-    float focal_length = 1.0f;
-
-    float3 w = float3_ops::normalize(float3_ops::sub(lookfrom, lookat));
-    float3 u = float3_ops::normalize(make_float3(vup.y * w.z - vup.z * w.y,
-                                                 vup.z * w.x - vup.x * w.z,
-                                                 vup.x * w.y - vup.y * w.x));
-    float3 v = make_float3(w.y * u.z - w.z * u.y, w.z * u.x - w.x * u.z,
-                           w.x * u.y - w.y * u.x);
-
+    // AI EDIT: Match CPU camera setup exactly
     camera.origin = lookfrom;
-    camera.horizontal = float3_ops::mul(u, viewport_width);
-    camera.vertical = float3_ops::mul(v, viewport_height);
-    camera.lower_left = float3_ops::sub(
-        float3_ops::sub(
-            float3_ops::sub(lookfrom, float3_ops::mul(camera.horizontal, 0.5f)),
-            float3_ops::mul(camera.vertical, 0.5f)),
-        float3_ops::mul(w, focal_length));
+    camera.fov = vfov;
+    
+    // Calculate basis vectors like CPU version
+    camera.forward = float3_ops::normalize(float3_ops::sub(lookat, lookfrom));
+    float3 world_up = make_float3(0, 1, 0);
+    
+    // right = cross(forward, world_up)
+    camera.right = float3_ops::normalize(make_float3(
+        camera.forward.y * world_up.z - camera.forward.z * world_up.y,
+        camera.forward.z * world_up.x - camera.forward.x * world_up.z,
+        camera.forward.x * world_up.y - camera.forward.y * world_up.x
+    ));
+    
+    // up = cross(right, forward)
+    camera.up = make_float3(
+        camera.right.y * camera.forward.z - camera.right.z * camera.forward.y,
+        camera.right.z * camera.forward.x - camera.right.x * camera.forward.z,
+        camera.right.x * camera.forward.y - camera.right.y * camera.forward.x
+    );
+    // END AI EDIT
   } else {
     // Fallback to default camera
     camera = setup_camera(width, height);
