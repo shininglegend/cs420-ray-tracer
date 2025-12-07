@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "*.mmd": "markdown",
+        "*.cu": "cuda-cpp",
         "vector": "cpp",
         "chrono": "cpp",
         "thread": "cpp",
@@ -10,10 +11,14 @@
         "iostream": "cpp",
         "algorithm": "cpp"
     },
+    "clangd.fallbackFlags": [
+        "-I${workspaceFolder}/include"
+    ],
     "C_Cpp.default.includePath": [
         "${workspaceFolder}/include",
         "/usr/local/cuda/include",
-        "/usr/include"
+        "/usr/include",
+        "/workspace/cs420-ray-tracer/include"
     ],
     "C_Cpp.default.compilerPath": "/usr/bin/g++",
     "C_Cpp.default.cppStandard": "c++11",
