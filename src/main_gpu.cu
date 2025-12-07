@@ -241,20 +241,17 @@ __device__ float3 shade(const float3 &point, const float3 &normal,
     // 2. Calculate diffuse component (Lambert)
     float3 light_dir = float3_ops::normalize(
         float3_ops::sub(const_lights[light_idx].position, point));
-    // BEGIN AI EDIT: Replace std::max with fmaxf for CUDA
+    // AI EDIT: Replace std::max with fmaxf for CUDA
     float n_dot_l = fmaxf(0.0f, float3_ops::dot(normal, light_dir));
-    // END AI EDIT
-    // BEGIN AI EDIT: Fix diffuse - use (1 - reflectivity) not reflectivity
+    // AI EDIT: Fix diffuse - use (1 - reflectivity) not reflectivity
     float3 diffuse = float3_ops::mul(
         float3_ops::mul(mat.albedo, (1.0f - mat.metallic)), n_dot_l);
-    // END AI EDIT
 
     // 3. Calculate specular component (Phong)
     float3 reflect_dir =
         float3_ops::reflect(float3_ops::mul(light_dir, -1.0f), normal);
-    // BEGIN AI EDIT: Replace std::max with fmaxf for CUDA
+    // AI EDIT: Replace std::max with fmaxf for CUDA
     float r_dot_v = fmaxf(0.0f, float3_ops::dot(reflect_dir, view_dir));
-    // END AI EDIT
     double spec_factor = pow(r_dot_v, mat.shininess);
     float3 specular = float3_ops::mul(
         float3_ops::mul(const_lights[light_idx].color, k_specular),
@@ -286,7 +283,6 @@ __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
   GPURay ray = camera.get_ray(u, v);
   // END AI EDIT
   int pixel_idx = (y * width) + x;
-  // BEGIN AI EDIT: Fix reflection accumulation logic
   // 2. Initialize color accumulator and attenuation
   float3 final_color = make_float3(0, 0, 0);
   float attenuation = 1.0f; // start at 1, decreases with each reflection
@@ -333,6 +329,7 @@ __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
                          hit, spheres, num_spheres, sphere_idx, num_lights);
 
     //  d. Accumulate color weighted by attenuation and reflectivity
+    // AI EDIT: Fix reflection accumulation logic to calculate attenuation
     float reflectivity = spheres[sphere_idx].material.metallic;
     final_color = float3_ops::add(
         final_color,
@@ -349,7 +346,6 @@ __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
     ray.direction = reflected_dir;
     // Update attenuation for next bounce
     attenuation *= reflectivity;
-    // END AI EDIT
   }
   // 4. Store final color in framebuffer
   framebuffer[pixel_idx] = final_color;
@@ -573,7 +569,7 @@ int main(int argc, char *argv[]) {
 
   // Convert lights
   if (scene_data.scene.lights.size() > 100) {
-    std::cerr << "Error: Scene has " << scene_data.scene.lights.size() 
+    std::cerr << "Error: Scene has " << scene_data.scene.lights.size()
               << " lights, but maximum is 100\n";
     return 1;
   }
@@ -675,8 +671,8 @@ int main(int argc, char *argv[]) {
   // For optimized version with shared memory:
   size_t shared_size = h_spheres.size() * sizeof(GPUSphere);
   render_kernel_optimized<<<blocks, threads, shared_size>>>(
-      d_framebuffer, d_spheres, h_spheres.size(), h_lights.size(),
-      camera, width, height, max_bounces);
+      d_framebuffer, d_spheres, h_spheres.size(), h_lights.size(), camera,
+      width, height, max_bounces);
 
   CUDA_CHECK(cudaEventRecord(stop));
   CUDA_CHECK(cudaEventSynchronize(stop));
