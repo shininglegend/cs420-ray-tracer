@@ -69,7 +69,8 @@ run_test() {
     return 0
 }
 
-# Function to compare images (basic check)
+# BEGIN AI EDIT: Use Python script for actual pixel comparison
+# Function to compare images (pixel-by-pixel)
 compare_images() {
     local img1=$1
     local img2=$2
@@ -78,24 +79,32 @@ compare_images() {
         return 1
     fi
     
-    # Compare file sizes
-    local size1=$(stat -c%s "$img1" 2>/dev/null || stat -f%z "$img1" 2>/dev/null)
-    local size2=$(stat -c%s "$img2" 2>/dev/null || stat -f%z "$img2" 2>/dev/null)
-    
-    local diff=$((size1 - size2))
-    if [ $diff -lt 0 ]; then
-        diff=$((-diff))
+    # Use Python comparison script with 1% tolerance for floating-point variations
+    local script_dir="$(dirname "$0")"
+    if [ -f "$script_dir/compare_ppm.py" ]; then
+        local result=$(python3 "$script_dir/compare_ppm.py" "$img1" "$img2" 1.0 2>&1)
+        local exit_code=$?
+        echo "  $result"
+        return $exit_code
+    else
+        # Fallback to basic file size comparison
+        local size1=$(stat -c%s "$img1" 2>/dev/null || stat -f%z "$img1" 2>/dev/null)
+        local size2=$(stat -c%s "$img2" 2>/dev/null || stat -f%z "$img2" 2>/dev/null)
+        
+        local diff=$((size1 - size2))
+        if [ $diff -lt 0 ]; then
+            diff=$((-diff))
+        fi
+        
+        local threshold=$((size1 / 20))
+        if [ $diff -gt $threshold ]; then
+            echo "  Warning: Output files differ significantly in size"
+            return 1
+        fi
+        return 0
     fi
-    
-    # Allow 5% difference in file size
-    local threshold=$((size1 / 20))
-    if [ $diff -gt $threshold ]; then
-        echo "  Warning: Output files differ significantly in size"
-        return 1
-    fi
-    
-    return 0
 }
+# END AI EDIT
 
 # Performance test
 performance_test() {
