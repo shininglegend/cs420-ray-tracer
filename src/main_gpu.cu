@@ -179,14 +179,11 @@ struct GPUCamera {
     // AI EDIT: Match CPU camera ray generation exactly
     float aspect = 1.0f;
     float scale = tanf(fov * 0.5f * M_PI / 180.0f);
-    
+
     float3 direction = float3_ops::add(
         forward,
-        float3_ops::add(
-            float3_ops::mul(right, (u - 0.5f) * scale * aspect),
-            float3_ops::mul(up, (v - 0.5f) * scale)
-        )
-    );
+        float3_ops::add(float3_ops::mul(right, (u - 0.5f) * scale * aspect),
+                        float3_ops::mul(up, (v - 0.5f) * scale)));
     // END AI EDIT
 
     GPURay ray;
@@ -197,7 +194,7 @@ struct GPUCamera {
 };
 
 // =========================================================
-// TODO: STUDENT IMPLEMENTATION - GPU Ray Tracing Kernel
+// STUDENT IMPLEMENTATION - GPU Ray Tracing Kernel
 // =========================================================
 // Implement the main ray tracing kernel that runs on the GPU.
 // Each thread handles one pixel.
@@ -366,7 +363,7 @@ __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
 }
 
 // =========================================================
-// TODO: STUDENT OPTIMIZATION - Shared Memory Kernel
+// STUDENT OPTIMIZATION - Shared Memory Kernel
 // =========================================================
 // Implement an optimized version using shared memory for spheres
 // that are accessed by all threads in a block.
@@ -378,7 +375,7 @@ __global__ void render_kernel_optimized(float3 *framebuffer,
                                         GPUCamera camera, int width, int height,
                                         int max_bounces) {
 
-  // TODO: STUDENT CODE HERE
+  // STUDENT CODE HERE
   // 1. Declare shared memory for spheres
   extern __shared__ GPUSphere shared_spheres[];
   // 2. Cooperatively load spheres into shared memory
@@ -510,24 +507,22 @@ GPUCamera setup_camera(int width, int height) {
   GPUCamera camera;
   camera.origin = lookfrom;
   camera.fov = vfov;
-  
+
   // Calculate basis vectors like CPU version
   camera.forward = float3_ops::normalize(float3_ops::sub(lookat, lookfrom));
   float3 world_up = make_float3(0, 1, 0);
-  
+
   // right = cross(forward, world_up)
   camera.right = float3_ops::normalize(make_float3(
       camera.forward.y * world_up.z - camera.forward.z * world_up.y,
       camera.forward.z * world_up.x - camera.forward.x * world_up.z,
-      camera.forward.x * world_up.y - camera.forward.y * world_up.x
-  ));
-  
+      camera.forward.x * world_up.y - camera.forward.y * world_up.x));
+
   // up = cross(right, forward)
   camera.up = make_float3(
       camera.right.y * camera.forward.z - camera.right.z * camera.forward.y,
       camera.right.z * camera.forward.x - camera.right.x * camera.forward.z,
-      camera.right.x * camera.forward.y - camera.right.y * camera.forward.x
-  );
+      camera.right.x * camera.forward.y - camera.right.y * camera.forward.x);
   // END AI EDIT
 
   return camera;
@@ -628,24 +623,22 @@ int main(int argc, char *argv[]) {
     // AI EDIT: Match CPU camera setup exactly
     camera.origin = lookfrom;
     camera.fov = vfov;
-    
+
     // Calculate basis vectors like CPU version
     camera.forward = float3_ops::normalize(float3_ops::sub(lookat, lookfrom));
     float3 world_up = make_float3(0, 1, 0);
-    
+
     // right = cross(forward, world_up)
     camera.right = float3_ops::normalize(make_float3(
         camera.forward.y * world_up.z - camera.forward.z * world_up.y,
         camera.forward.z * world_up.x - camera.forward.x * world_up.z,
-        camera.forward.x * world_up.y - camera.forward.y * world_up.x
-    ));
-    
+        camera.forward.x * world_up.y - camera.forward.y * world_up.x));
+
     // up = cross(right, forward)
     camera.up = make_float3(
         camera.right.y * camera.forward.z - camera.right.z * camera.forward.y,
         camera.right.z * camera.forward.x - camera.right.x * camera.forward.z,
-        camera.right.x * camera.forward.y - camera.right.y * camera.forward.x
-    );
+        camera.right.x * camera.forward.y - camera.right.y * camera.forward.x);
     // END AI EDIT
   } else {
     // Fallback to default camera

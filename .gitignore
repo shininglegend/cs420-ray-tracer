@@ -7,3 +7,4 @@ populi-files/*
 !populi-files/*.cpp
 .cache/*
 compile_commands.json
+kernel.o

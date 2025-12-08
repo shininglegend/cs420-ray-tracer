@@ -15,6 +15,7 @@
 #include <omp.h>
 #endif
 
+#include "camera.h"
 #include "ray.h"
 #include "ray_math_constants.h"
 #include "scene.h"
@@ -23,7 +24,7 @@
 #include "vec3.h"
 
 // CUDA runtime API (for hybrid execution)
-// #include <cuda_runtime.h>
+#include <cuda_runtime.h>
 
 // =========================================================
 // Image Output Functions
@@ -92,8 +93,39 @@ Vec3 trace_ray_cpu(const Ray &ray, const Scene &scene, int depth) {
   // TODO: STUDENT - Implement CPU ray tracing
   // This should handle complex shading, deep reflections, etc.
   // Can reuse code from Week 1
+  // NOTE (TM): This is a pretty much direct copy-paste from week 1, but I
+  // removed some comments to shorten it up.
+  if (depth <= 0)
+    return Vec3(0, 0, 0);
+  double t;
+  int sphere_idx;
 
-  return scene.get_background(ray);
+  // 1. Calculate hit point (scene.h.intersection)
+  if (!scene.find_intersection(ray, t, sphere_idx)) {
+    // Sky color gradient
+    double t = 0.5 * (ray.direction.y + 1.0);
+    return Vec3(1, 1, 1) * (1.0 - t) + Vec3(0.5, 0.7, 1.0) * t;
+  }
+
+  Vec3 hit = ray.origin + ray.direction * t;            // Find actual hitpooint
+  Vec3 norm = scene.spheres[sphere_idx].normal_at(hit); // Normalize
+
+  // 2. Call scene.shade() for color
+  Vec3 view_dir = (ray.origin - hit).normalized(); // From Ai
+  Vec3 shade =
+      scene.shade(hit, norm, scene.spheres[sphere_idx].material, view_dir);
+
+  // 3. If material is reflective, recursively trace reflection ray
+  if (scene.spheres[sphere_idx].material.reflectivity > 0) {
+    Vec3 reflected_dir = ray.direction - norm * 2.0 * dot(ray.direction, norm);
+    Ray reflected_ray(hit + norm * EPSILON, reflected_dir);
+    Vec3 reflected_color = trace_ray_cpu(reflected_ray, scene, depth - 1);
+
+    double refl = scene.spheres[sphere_idx].material.reflectivity;
+    shade = shade * (1.0 - refl) + reflected_color * refl;
+  }
+
+  return shade;
 }
 
 void process_tile_cpu(const Tile &tile, const Scene &scene,
@@ -103,7 +135,9 @@ void process_tile_cpu(const Tile &tile, const Scene &scene,
 #pragma omp parallel for collapse(2) schedule(dynamic, 4)
   for (int y = tile.y_start; y < tile.y_end; y++) {
     for (int x = tile.x_start; x < tile.x_end; x++) {
-      Ray ray = camera.get_ray_pixel(x, y, width, height);
+      double u = double(x) / (width - 1);
+      double v = double(y) / (height - 1);
+      Ray ray = camera.get_ray(u, v);
       framebuffer[y * width + x] = trace_ray_cpu(ray, scene, max_depth);
     }
   }
@@ -206,8 +240,8 @@ void render_hybrid(const Scene &scene, const Camera &camera,
   }
 
   // Initialize GPU resources
-  GPUResources gpu_resources(width, height, scene.get_spheres().size(),
-                             scene.get_lights().size());
+  GPUResources gpu_resources(width, height, scene.spheres.size(),
+                             scene.lights.size());
   gpu_resources.upload_scene(scene);
 
   // Create CUDA streams for pipelining

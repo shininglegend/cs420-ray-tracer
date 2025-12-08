@@ -7,6 +7,11 @@ CUDAFLAGS = -O3 -arch=sm_60
 # Define source and include directories
 SRCDIR = src
 INCDIR = include
+# AI EDIT: Add CUDA paths for hybrid compilation
+CUDA_PATH = /usr/local/cuda
+CUDA_INC = $(CUDA_PATH)/include
+CUDA_LIB = $(CUDA_PATH)/lib64
+# END AI EDIT
 
 # Add the include path to CXXFLAGS and CUDAFLAGS
 # The -I flag tells the compiler to look in $(INCDIR) for header files
@@ -26,10 +31,12 @@ cuda: $(SRCDIR)/main_gpu.cu
 	$(NVCC) $(CUDAFLAGS) -o ray_cuda $(SRCDIR)/main_gpu.cu
 
 # Week 3 target (placeholder)
+# AI EDIT: Add CUDA include path and library linking for hybrid
 hybrid: $(SRCDIR)/main_hybrid.cpp $(SRCDIR)/kernel.cu
 	$(NVCC) $(CUDAFLAGS) -c $(SRCDIR)/kernel.cu
-	$(CXX) $(CXXFLAGS) $(OMPFLAGS) -c $(SRCDIR)/main_hybrid.cpp
-	$(NVCC) $(CUDAFLAGS) kernel.o main_hybrid.o -o ray_hybrid
+	$(CXX) $(CXXFLAGS) $(OMPFLAGS) -I$(CUDA_INC) -c $(SRCDIR)/main_hybrid.cpp
+	$(NVCC) $(CUDAFLAGS) kernel.o main_hybrid.o -o ray_hybrid -L$(CUDA_LIB) -lcudart
+# END AI EDIT
 
 clean:
 	rm -f ray_serial ray_openmp ray_cuda ray_hybrid *.o *.ppm
