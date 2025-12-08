@@ -124,7 +124,6 @@ Vec3 trace_ray_cpu(const Ray &ray, const Scene &scene, int depth) {
     double refl = scene.spheres[sphere_idx].material.reflectivity;
     shade = shade * (1.0 - refl) + reflected_color * refl;
   }
-
   return shade;
 }
 

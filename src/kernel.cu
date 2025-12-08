@@ -1,4 +1,4 @@
-
+// TODO: import from the gpu_shared.h header file
 
 __global__ void launch_gpu_kernel(float *d_framebuffer, float *d_spheres,
                                   int num_spheres, float *d_lights,
