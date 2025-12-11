@@ -1,5 +1,6 @@
 // This includes shared functions between the hybrid and GPU versions.
-// TODO: Add the other functions. It will have errors because cuda runtime can't be found.
+// TODO: Add the other functions. It will have errors because cuda runtime can't
+// be found.
 #include "scene_loader.h"
 #include <cmath>
 #include <cuda_runtime.h>
@@ -8,6 +9,7 @@
 #include <iostream>
 #include <math_constants.h>
 #include <vector>
+
 // =========================================================
 // GPU Vector and Ray Classes (simplified for CUDA)
 // =========================================================
@@ -169,7 +171,33 @@ struct GPUCamera {
   }
 };
 
-//  c. Calculate shading (ambient + diffuse + specular)
+// Consts
+__constant__ float3 ambient_light = {0.1f, 0.1f, 0.1f};
+__constant__ double k_specular = 0.5;
+__constant__ GPULight const_lights[100]; // Set max 100
+
+// Helper functions
+__device__ bool in_shadow(const float3 &point, const GPULight &light,
+                          GPUSphere *spheres, int num_spheres) {
+  float3 to_light = float3_ops::sub(light.position, point);
+  float light_dist = float3_ops::length(to_light);
+  float3 light_dir = float3_ops::normalize(to_light);
+
+  GPURay shadow_ray;
+  shadow_ray.origin = point;
+  shadow_ray.direction = light_dir;
+
+  // Check if any sphere blocks the light
+  for (int i = 0; i < num_spheres; i++) {
+    float t;
+    if (spheres[i].intersect(shadow_ray, EPSILON, light_dist, t)) {
+      return true; // Something blocks the light
+    }
+  }
+  return false;
+}
+
+// Calculate shading (ambient + diffuse + specular)
 __device__ float3 shade(const float3 &point, const float3 &normal,
                         const GPUMaterial &mat, const float3 &view_dir,
                         const float3 hit, GPUSphere *spheres, int num_spheres,

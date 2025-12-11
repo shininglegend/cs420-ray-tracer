@@ -46,31 +46,6 @@
 // - Use shared memory for frequently accessed data
 // - Be careful with memory access patterns
 // =========================================================
-// Consts
-__constant__ float3 ambient_light = {0.1f, 0.1f, 0.1f};
-__constant__ double k_specular = 0.5;
-__constant__ GPULight const_lights[100]; // Set max 100
-
-// Helper functions
-__device__ bool in_shadow(const float3 &point, const GPULight &light,
-                          GPUSphere *spheres, int num_spheres) {
-  float3 to_light = float3_ops::sub(light.position, point);
-  float light_dist = float3_ops::length(to_light);
-  float3 light_dir = float3_ops::normalize(to_light);
-
-  GPURay shadow_ray;
-  shadow_ray.origin = point;
-  shadow_ray.direction = light_dir;
-
-  // Check if any sphere blocks the light
-  for (int i = 0; i < num_spheres; i++) {
-    float t;
-    if (spheres[i].intersect(shadow_ray, EPSILON, light_dist, t)) {
-      return true; // Something blocks the light
-    }
-  }
-  return false;
-}
 
 // Render function
 __global__ void render_kernel(float3 *framebuffer, GPUSphere *spheres,
