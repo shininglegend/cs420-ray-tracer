@@ -92,8 +92,8 @@ void write_ppm(const std::string &filename,
 
 int main(int argc, char *argv[]) {
   // Image settings
-  const int width = 640;
-  const int height = 480;
+  const int width = 1280;
+  const int height = 720;
   const int max_depth = 10;
 
   // BEGIN EDIT: Parse --openmp flag

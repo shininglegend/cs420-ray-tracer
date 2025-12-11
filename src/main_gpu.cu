@@ -34,7 +34,6 @@
     }                                                                          \
   } while (0)
 
-
 // =========================================================
 // STUDENT IMPLEMENTATION - GPU Ray Tracing Kernel
 // =========================================================
@@ -304,8 +303,8 @@ GPUCamera setup_camera(int width, int height) {
 
 int main(int argc, char *argv[]) {
   // Image settings
-  const int width = 640;
-  const int height = 480;
+  const int width = 1280;
+  const int height = 720;
   const int max_bounces = 10;
 
   // BEGIN AI EDIT: Parse command-line arguments for scene file

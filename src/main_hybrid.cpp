@@ -25,6 +25,19 @@
 
 // CUDA runtime API (for hybrid execution)
 #include <cuda_runtime.h>
+#include "gpu_shared.h"
+
+// CUDA error checking macro
+#define CUDA_CHECK(call)                                                       \
+  do {                                                                         \
+    cudaError_t error = call;                                                  \
+    if (error != cudaSuccess) {                                                \
+      std::cerr << "CUDA error at " << __FILE__ << ":" << __LINE__ << " - "    \
+                << cudaGetErrorString(error) << std::endl;                     \
+      exit(1);                                                                 \
+    }                                                                          \
+  } while (0)
+
 
 // =========================================================
 // Image Output Functions
@@ -44,8 +57,14 @@ void write_ppm(const std::string &filename,
   // Write pixels (PPM is top-to-bottom)
   for (int j = height - 1; j >= 0; j--) {
     for (int i = 0; i < width; i++) {
-      int r, g, b;
-      framebuffer[j * width + i].to_rgb(r, g, b);
+      Vec3 color = framebuffer[j * width + i];
+      auto r = color.x;
+      auto g = color.y;
+      auto b = color.z;
+      r = int(255.99 * std::min(1.0, r));
+      g = int(255.99 * std::min(1.0, g));
+      b = int(255.99 * std::min(1.0, b));
+      // framebuffer[j * width + i].to_rgb(r, g, b);
       file << r << " " << g << " " << b << "\n";
     }
   }
@@ -149,43 +168,92 @@ class GPUResources {
 private:
   float *d_framebuffer;
   float *d_spheres;
-  float *d_lights;
   size_t fb_size;
   size_t spheres_size;
-  size_t lights_size;
 
 public:
   GPUResources(int width, int height, int num_spheres, int num_lights) {
-    fb_size = width * height * 3 * sizeof(float);
-    spheres_size =
-        num_spheres * 8 * sizeof(float); // center(3) + radius(1) + material(4)
-    lights_size =
-        num_lights * 7 * sizeof(float); // position(3) + color(3) + intensity(1)
+    fb_size = width * height * sizeof(float3);
+    spheres_size = num_spheres * sizeof(GPUSphere); // Switch to object
 
-    cudaMalloc(&d_framebuffer, fb_size);
-    cudaMalloc(&d_spheres, spheres_size);
-    cudaMalloc(&d_lights, lights_size);
+    CUDA_CHECK(cudaMalloc(&d_framebuffer, fb_size));
+    CUDA_CHECK(cudaMalloc(&d_spheres, spheres_size));
   }
 
   ~GPUResources() {
-    cudaFree(d_framebuffer);
-    cudaFree(d_spheres);
-    cudaFree(d_lights);
+    CUDA_CHECK(cudaFree(d_framebuffer));
+    CUDA_CHECK(cudaFree(d_spheres));
   }
 
   void upload_scene(const Scene &scene) {
     // TODO: STUDENT - Convert scene data to GPU format and upload
     // Pack spheres and lights into float arrays
+    std::vector<GPUSphere> h_spheres;
+    std::vector<GPULight> h_lights;
+
+    // Convert spheres
+    for (const auto &sphere : scene.spheres) {
+      GPUSphere gpu_sphere;
+      gpu_sphere.center =
+          make_float3(sphere.center.x, sphere.center.y, sphere.center.z);
+      gpu_sphere.radius = sphere.radius;
+      gpu_sphere.material.albedo =
+          make_float3(sphere.material.color.x, sphere.material.color.y,
+                      sphere.material.color.z);
+      gpu_sphere.material.metallic = sphere.material.reflectivity;
+      gpu_sphere.material.shininess = sphere.material.shininess;
+      h_spheres.push_back(gpu_sphere);
+    }
+    // This line was helpfully provided by Ai
+    CUDA_CHECK(cudaMemcpy(d_spheres, h_spheres.data(),
+                          h_spheres.size() * sizeof(GPUSphere),
+                          cudaMemcpyHostToDevice));
+
+    // Convert lights
+    for (const auto &light : scene.lights) {
+      GPULight gpu_light;
+      gpu_light.position =
+          make_float3(light.position.x, light.position.y, light.position.z);
+      gpu_light.color =
+          make_float3(light.color.x, light.color.y, light.color.z);
+      gpu_light.intensity = light.intensity;
+      h_lights.push_back(gpu_light);
+    }
+    CUDA_CHECK(cudaMemcpyToSymbol(const_lights, h_lights.data(),
+                                  h_lights.size() * sizeof(GPULight)));
   }
 
   void download_tile(const Tile &tile, std::vector<Vec3> &framebuffer,
                      int width, cudaStream_t stream) {
-    // TODO: STUDENT - Download tile results from GPU to CPU framebuffer
+    // set up a temp framebuffer
+    size_t tile_height = tile.y_end - tile.y_start;
+    size_t tile_width = tile.x_end - tile.x_start;
+    std::vector<float3> temp_framebuffer(tile_height * tile_width);
+    // Ai helped with pseudocode and debugging for this
+    // copy each row
+    for (int y = tile.y_start; y < tile.y_end; y++) {
+      size_t row_offset = y * width + tile.x_start;
+      size_t temp_offset = (y - tile.y_start) * tile_width;
+      // copy it down
+      CUDA_CHECK(cudaMemcpyAsync(
+          &temp_framebuffer[temp_offset], &d_framebuffer[row_offset],
+          tile_width * sizeof(float3), cudaMemcpyDeviceToHost, stream));
+    }
+    // Sync
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+    // Then convert all rows to float3 → Vec3
+    for (int y = tile.y_start; y < tile.y_end; y++) {
+      for (int x = tile.x_start; x < tile.x_end; x++) {
+        int temp_idx = (y - tile.y_start) * tile_width + (x - tile.x_start);
+        int fb_idx = y * width + x;
+        float3 gpu_color = temp_framebuffer[temp_idx];
+        framebuffer[fb_idx] = Vec3(gpu_color.x, gpu_color.y, gpu_color.z);
+      }
+    }
   }
 
   float *get_framebuffer() { return d_framebuffer; }
   float *get_spheres() { return d_spheres; }
-  float *get_lights() { return d_lights; }
 };
 
 // =========================================================
@@ -259,7 +327,8 @@ void render_hybrid(const Scene &scene, const Camera &camera,
   int complexity_threshold = width * height / (tile_size * tile_size) * 2;
 
   for (auto &tile : tiles) {
-    if (tile.complexity_estimate > complexity_threshold) {
+    // if (tile.complexity_estimate > complexity_threshold) {
+    if (false) {
       cpu_queue.push(&tile);
     } else {
       gpu_queue.push(&tile);
@@ -300,7 +369,7 @@ void render_hybrid(const Scene &scene, const Camera &camera,
         cudaStream_t stream = streams[stream_idx];
         stream_idx = (stream_idx + 1) % NUM_STREAMS;
 
-        // launch_gpu_kernel(..., stream);
+        // launch_gpu_kernel(framebuffer, );
 
         tile->processed = true;
       }
@@ -362,7 +431,6 @@ int main(int argc, char *argv[]) {
   const int width = 1280;
   const int height = 720;
   const int max_depth = 3;
-  const double aspect_ratio = double(width) / double(height);
 
   // Parse command line arguments
   // BEGIN AI EDIT: Add scene file argument support
@@ -419,15 +487,17 @@ int main(int argc, char *argv[]) {
   std::cout << "Loading scene from: " << scene_file << std::endl;
   SceneData scene_data = load_scene(scene_file);
   Scene scene = scene_data.scene;
-  scene.print_stats();
+  // scene.print_stats();
 
   // Setup camera from loaded scene data
   Vec3 lookfrom = scene_data.camera.position;
   Vec3 lookat = scene_data.camera.look_at;
   Vec3 vup(0, 1, 0);
   double vfov = scene_data.camera.fov;
+  // END AI EDIT
 
-  Camera camera(lookfrom, lookat, vup, vfov, aspect_ratio);
+  // BEGIN AI EDIT: Fix Camera constructor call to match 3-argument signature
+  Camera camera(lookfrom, lookat, vfov);
   // END AI EDIT
 
   // Allocate framebuffer
