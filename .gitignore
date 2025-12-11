@@ -3,8 +3,10 @@ output_*.png
 ray_serial
 ray_openmp
 ray_cuda
+ray_hybrid
 populi-files/*
 !populi-files/*.cpp
 .cache/*
 compile_commands.json
 kernel.o
+main_hybrid.o

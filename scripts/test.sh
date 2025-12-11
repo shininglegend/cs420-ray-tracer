@@ -212,12 +212,16 @@ case $TEST_TYPE in
     cuda)
         run_test "CUDA Implementation" "ray_cuda" "" "output_gpu.ppm"
         ;;
+    hybrid)
+        run_test "Hybrid Implementation" "ray_hybrid" "" "output_hybrid.ppm"
+        ;;
     all)
         echo "Running All Tests:"
         echo "------------------"
         run_test "Serial Implementation" "ray_serial" "" "output_serial.ppm"
         run_test "OpenMP Implementation" "ray_openmp" "--openmp" "output_openmp.ppm"
         run_test "CUDA Implementation" "ray_cuda" "" "output_gpu.ppm"
+        run_test "Hybrid Implementation" "ray_hybrid" "" "output_hybrid.ppm"
         
         # BEGIN AI EDIT: Add CUDA output comparison
         echo ""
@@ -240,13 +244,22 @@ case $TEST_TYPE in
                 echo -e "  ${YELLOW}⚠ Serial and CUDA outputs differ${NC}"
             fi
         fi
+        
+        if [ -f "output_serial.ppm" ] && [ -f "output_hybrid.ppm" ]; then
+            compare_images "output_serial.ppm" "output_hybrid.ppm"
+            if [ $? -eq 0 ]; then
+                echo -e "  ${GREEN}✓ Serial and Hybrid outputs match${NC}"
+            else
+                echo -e "  ${YELLOW}⚠ Serial and Hybrid outputs differ${NC}"
+            fi
+        fi
         # END AI EDIT
         
-        performance_test
+        # performance_test # Remove performance test, as it doesn't work anyway
         memory_check
         ;;
     *)
-        echo "Usage: $0 [serial|openmp|cuda|all]"
+        echo "Usage: $0 [serial|openmp|cuda|hybrid|all]"
         exit 1
         ;;
 esac

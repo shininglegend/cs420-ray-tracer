@@ -1,3 +1,7 @@
+# BEGIN AI EDIT: Add default 'all' target
+all: serial openmp cuda hybrid
+# END AI EDIT
+
 CXX = g++
 CXXFLAGS = -std=c++11 -O3 -Wall
 OMPFLAGS = -fopenmp
@@ -35,7 +39,7 @@ cuda: $(SRCDIR)/main_gpu.cu
 hybrid: $(SRCDIR)/main_hybrid.cpp $(SRCDIR)/kernel.cu
 	$(NVCC) $(CUDAFLAGS) -c $(SRCDIR)/kernel.cu
 	$(CXX) $(CXXFLAGS) $(OMPFLAGS) -I$(CUDA_INC) -c $(SRCDIR)/main_hybrid.cpp
-	$(NVCC) $(CUDAFLAGS) kernel.o main_hybrid.o -o ray_hybrid -L$(CUDA_LIB) -lcudart
+	$(NVCC) $(CUDAFLAGS) kernel.o main_hybrid.o -o ray_hybrid -L$(CUDA_LIB) -lcudart -Xcompiler -fopenmp -lgomp
 # END AI EDIT
 
 clean:
