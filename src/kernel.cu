@@ -77,7 +77,7 @@ __device__ float3 shade(const float3 &point, const float3 &normal,
 // Function for running on one tile
 __global__ void gpu_kernel_impl(float3 *d_framebuffer, GPUSphere *d_spheres,
                                 int num_spheres, int num_lights,
-                                GPUCamera camera, int tile_x, int tile_y,
+                                GPUCamera *camera, int tile_x, int tile_y,
                                 int tile_width, int tile_height,
                                 int image_width, int image_height,
                                 int max_depth) {
@@ -108,7 +108,7 @@ __global__ void gpu_kernel_impl(float3 *d_framebuffer, GPUSphere *d_spheres,
   // 1. Generate ray for this pixel
   float u = float(x) / float(image_width - 1);
   float v = float(y) / float(image_height - 1);
-  GPURay ray = camera.get_ray(u, v);
+  GPURay ray = camera->get_ray(u, v);
 
   int pixel_idx = (y * image_width) + x;
   // BEGIN AI EDIT: Fix reflection accumulation logic
@@ -195,9 +195,9 @@ extern "C" void launch_gpu_kernel(float3 *d_framebuffer, GPUSphere *d_spheres,
   // BEGIN AI EDIT: Pass shared memory size for spheres
   size_t shared_mem_size = num_spheres * sizeof(GPUSphere);
   gpu_kernel_impl<<<grid, block, shared_mem_size, stream>>>(
-  // END AI EDIT
-      d_framebuffer, d_spheres, num_spheres, num_lights, *camera, tile_x,
-      tile_y, tile_width, tile_height, image_width, image_height, max_depth);
+      // END AI EDIT
+      d_framebuffer, d_spheres, num_spheres, num_lights, camera, tile_x, tile_y,
+      tile_width, tile_height, image_width, image_height, max_depth);
 }
 
 extern "C" void upload_lights_and_ambience(GPULight *lights, int count,

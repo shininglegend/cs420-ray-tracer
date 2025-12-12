@@ -319,6 +319,10 @@ int estimate_tile_complexity(const Tile &tile, const Scene &scene,
   // - Distance from camera
   // Simple version: sample a few rays and count intersections
 
+  // My Idea 1: Sample an X (top left, top right, middle, bottom left, bottom right)
+  // Count number of intersections. Middle ray counts each intersection 2x. 
+  // Ai will implement here:
+
   return tile.pixel_count(); // Placeholder: just use pixel count
 }
 
