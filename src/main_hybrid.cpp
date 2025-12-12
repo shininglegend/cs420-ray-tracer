@@ -39,6 +39,8 @@
   } while (0)
 
 const int NUM_STREAMS = 3;
+const int IMG_WIDTH = 1080;
+const int IMG_HEIGHT = 720;
 
 // =========================================================
 // Image Output Functions
@@ -110,7 +112,7 @@ extern "C" void launch_gpu_kernel(float3 *d_framebuffer, GPUSphere *d_spheres,
 // CPU Ray Tracing (Complex Shading Path)
 // =========================================================
 Vec3 trace_ray_cpu(const Ray &ray, const Scene &scene, int depth) {
-  // TODO: STUDENT - Implement CPU ray tracing
+  // STUDENT - Implement CPU ray tracing
   // This should handle complex shading, deep reflections, etc.
   // Can reuse code from Week 1
   // NOTE (TM): This is a pretty much direct copy-paste from week 1, but I
@@ -192,7 +194,7 @@ public:
   }
 
   void upload_scene(const Scene &scene, int width, int height) {
-    // TODO: STUDENT - Convert scene data to GPU format and upload
+    // STUDENT - Convert scene data to GPU format and upload
     // Pack spheres and lights into float arrays
     std::vector<GPUSphere> h_spheres;
     std::vector<GPULight> h_lights;
@@ -278,23 +280,26 @@ public:
 
   void download_tile(const Tile &tile, std::vector<Vec3> &framebuffer,
                      int width, cudaStream_t stream) {
-    // set up a temp framebuffer
     size_t tile_height = tile.y_end - tile.y_start;
     size_t tile_width = tile.x_end - tile.x_start;
     std::vector<float3> temp_framebuffer(tile_height * tile_width);
-    // Ai helped with pseudocode and debugging for this
-    // copy each row
-    for (int y = tile.y_start; y < tile.y_end; y++) {
-      size_t row_offset = y * width + tile.x_start;
-      size_t temp_offset = (y - tile.y_start) * tile_width;
-      // copy it down
-      CUDA_CHECK(cudaMemcpyAsync(
-          &temp_framebuffer[temp_offset], &d_framebuffer[row_offset],
-          tile_width * sizeof(float3), cudaMemcpyDeviceToHost, stream));
-    }
+    // BEGIN AI EDIT: Replace row-by-row cudaMemcpyAsync
+    // Single 2D async copy handles strided memory efficiently
+    CUDA_CHECK(cudaMemcpy2DAsync(
+        temp_framebuffer.data(),     // dst (contiguous temp buffer)
+        tile_width * sizeof(float3), // dst pitch (packed rows)
+        &d_framebuffer[tile.y_start * width +
+                       tile.x_start], // src (strided in GPU fb)
+        width * sizeof(float3),       // src pitch (full image row)
+        tile_width * sizeof(float3),  // width to copy per row
+        tile_height,                  // number of rows
+        cudaMemcpyDeviceToHost, stream));
+    // END AI EDIT
+
     // Sync
     CUDA_CHECK(cudaStreamSynchronize(stream));
-    // Then convert all rows to float3 → Vec3
+
+    // Convert float3 → Vec3
     for (int y = tile.y_start; y < tile.y_end; y++) {
       for (int x = tile.x_start; x < tile.x_end; x++) {
         int temp_idx = (y - tile.y_start) * tile_width + (x - tile.x_start);
@@ -337,8 +342,8 @@ int estimate_tile_complexity(const Tile &tile, const Scene &scene,
   int weight[5] = {1, 1, 2, 1, 1}; // Middle ray counts 2x
 
   for (int i = 0; i < 5; i++) {
-    double u = double(sample_x[i]) / 1280.0; // Assuming image width
-    double v = double(sample_y[i]) / 720.0;  // Assuming image height
+    double u = double(sample_x[i]) / float(IMG_WIDTH);
+    double v = double(sample_y[i]) / float(IMG_HEIGHT);
     Ray ray = camera.get_ray(u, v);
 
     // Count intersections with all spheres
@@ -355,7 +360,7 @@ int estimate_tile_complexity(const Tile &tile, const Scene &scene,
 }
 
 // =========================================================
-// TODO: STUDENT IMPLEMENTATION - Hybrid Work Distribution
+// STUDENT IMPLEMENTATION - Hybrid Work Distribution
 // =========================================================
 // Design and implement the work distribution strategy.
 // Decide which tiles go to CPU vs GPU based on:
@@ -403,7 +408,7 @@ void render_hybrid(const Scene &scene, const Camera &camera,
     cudaStreamCreate(&streams[i]);
   }
 
-  // TODO: STUDENT - Implement work distribution
+  // STUDENT - Implement work distribution
 
   // Simple strategy: complex tiles to CPU, simple to GPU
   // Threshold if at least x of the rays hit
@@ -580,6 +585,28 @@ void render_hybrid_pipeline(const Scene &scene, const Camera &camera,
   {
 #pragma omp section // GPU SECTION
     {
+      // BEGIN AI EDIT: Comments for async pipeline pattern changes needed
+      // CURRENT: Batch-style execution (all kernels, then one bulk download)
+      // NEEDED FOR TRUE ASYNC PIPELINE:
+      //   for (int i = 0; i < num_tiles; i++) {
+      //       int s = i % NUM_STREAMS;
+      //       kernel<<<grid, block, 0, streams[s]>>>(...);
+      //       cudaMemcpyAsync(h_pinned + offset, d_fb + offset, ..., D2H,
+      //       streams[s]);
+      //   }
+      //   cudaDeviceSynchronize(); // Wait for all streams
+      //
+      // Note: H→D cudaMemcpyAsync not needed here — scene data (spheres,
+      // lights, camera) is shared by all tiles and pre-uploaded once in
+      // upload_scene(). Only the D→H transfer (tile output pixels) benefits
+      // from async pipeline.
+      //
+      // Changes required:
+      // 1. Add per-tile cudaMemcpyAsync AFTER kernel (D→H) instead of bulk copy
+      // 2. Remove bulk cudaMemcpy at end (async copies handle it)
+      // 3. Note: Non-contiguous tile rows require row-by-row async copies
+      // END AI EDIT
+
       // Launch ALL GPU tile kernels (no sync between launches)
       // launch_gpu_kernel(..., tile, stream[i++ % NUM_STREAMS]);
       int i = 0;
@@ -594,6 +621,14 @@ void render_hybrid_pipeline(const Scene &scene, const Camera &camera,
             tile->x_end - tile->x_start, tile->y_end - tile->y_start, width,
             height, max_depth, streams[i++ % NUM_STREAMS]);
         tile->processed = true;
+        // BEGIN AI EDIT: For true async pipeline, add per-tile D→H transfer
+        // here: cudaMemcpyAsync(&h_pinned_fb[tile->y_start * width +
+        // tile->x_start],
+        //                 &d_framebuffer[tile->y_start * width +
+        //                 tile->x_start], tile_bytes, cudaMemcpyDeviceToHost,
+        //                 streams[s]);
+        // (Note: non-contiguous tile rows require row-by-row async copies)
+        // END AI EDIT
         i++;
       }
 
@@ -601,6 +636,9 @@ void render_hybrid_pipeline(const Scene &scene, const Camera &camera,
       cudaDeviceSynchronize();
 
       // ONE bulk download of entire GPU framebuffer (Bug fix from Ai here)
+      // BEGIN AI EDIT: This bulk copy would be REMOVED in true async pipeline
+      // since per-tile cudaMemcpyAsync calls above would handle it
+      // END AI EDIT
       cudaMemcpy(h_pinned_fb, gpu_resources.get_framebuffer(),
                  width * height * sizeof(float3), cudaMemcpyDeviceToHost);
     }
@@ -672,8 +710,8 @@ void render_hybrid_pipeline(const Scene &scene, const Camera &camera,
 // =========================================================
 int main(int argc, char *argv[]) {
   // Image settings
-  const int width = 1280;
-  const int height = 720;
+  const int width = IMG_WIDTH;
+  const int height = IMG_HEIGHT;
   const int max_depth = 3;
 
   // Parse command line arguments

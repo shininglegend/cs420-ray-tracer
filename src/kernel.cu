@@ -1,4 +1,3 @@
-// TODO: import from the gpu_shared.h header file
 #include <cstddef>
 #include <cuda_runtime.h>
 

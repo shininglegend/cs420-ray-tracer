@@ -9,8 +9,8 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Test configuration
-WIDTH=320
-HEIGHT=240
+WIDTH=1080
+HEIGHT=720
 TIMEOUT=30
 
 echo "========================================="

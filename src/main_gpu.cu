@@ -272,7 +272,6 @@ __global__ void render_kernel_optimized(float3 *framebuffer,
            curr_sphere_idx++) {
         float temp_t = 0;
         // If an intersection, and smallest t, save it.
-        // TODO: are t_min and t_max set right?
         if (shared_spheres[curr_sphere_idx].intersect(ray, EPSILON, INFINITY,
                                                       temp_t)) {
           if (temp_t < t) {
