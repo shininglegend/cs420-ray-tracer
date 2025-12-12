@@ -321,9 +321,30 @@ int estimate_tile_complexity(const Tile &tile, const Scene &scene,
 
   // My Idea 1: Sample an X (top left, top right, middle, bottom left, bottom right)
   // Count number of intersections. Middle ray counts each intersection 2x. 
-  // Ai will implement here:
-
-  return tile.pixel_count(); // Placeholder: just use pixel count
+  // BEGIN AI EDIT: Implement X-pattern sampling for complexity estimation
+  int complexity = 0;
+  
+  // Sample points: corners + middle (X pattern)
+  int sample_x[5] = {tile.x_start, tile.x_end - 1, (tile.x_start + tile.x_end) / 2, tile.x_start, tile.x_end - 1};
+  int sample_y[5] = {tile.y_start, tile.y_start, (tile.y_start + tile.y_end) / 2, tile.y_end - 1, tile.y_end - 1};
+  int weight[5] = {1, 1, 2, 1, 1};  // Middle ray counts 2x
+  
+  for (int i = 0; i < 5; i++) {
+    double u = double(sample_x[i]) / 1280.0;  // Assuming image width
+    double v = double(sample_y[i]) / 720.0;   // Assuming image height
+    Ray ray = camera.get_ray(u, v);
+    
+    // Count intersections with all spheres
+    for (const auto &sphere : scene.spheres) {
+      double t;
+      if (sphere.intersect(ray, t)) {
+        complexity += weight[i];
+      }
+    }
+  }
+  // END AI EDIT
+  
+  return complexity; // Base cost + intersection complexity
 }
 
 // =========================================================
@@ -379,11 +400,12 @@ void render_hybrid(const Scene &scene, const Camera &camera,
   std::queue<Tile *> gpu_queue;
 
   // Simple strategy: complex tiles to CPU, simple to GPU
-  int complexity_threshold = width * height / (tile_size * tile_size) * 2;
+  // Threshold if at least x of the rays hit
+  // I'm aiming for about 70% on GPU, 30% on CPU to start
+  int complexity_threshold = 7; 
 
   for (auto &tile : tiles) {
-    // if (tile.complexity_estimate > complexity_threshold) {
-    if (false) {
+    if (tile.complexity_estimate > complexity_threshold) {
       cpu_queue.push(&tile);
     } else {
       gpu_queue.push(&tile);
