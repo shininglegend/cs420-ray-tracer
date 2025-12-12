@@ -182,7 +182,9 @@ struct GPUCamera {
   }
 };
 
-GPUCamera setup_camera(int width, int height) {
+// AI EDIT: add inline to prevent multiple definition linker error
+inline GPUCamera setup_camera(int width, int height) {
+// END AI EDIT
   // Camera parameters
   float3 lookfrom = make_float3(0, 2, 5);
   float3 lookat = make_float3(0, 0, -20);

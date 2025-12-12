@@ -98,8 +98,9 @@ struct Tile {
 // =========================================================
 // BEGIN AI EDIT: Fix declaration to match call site and use float3*
 extern "C" void launch_gpu_kernel(float3 *d_framebuffer, GPUSphere *d_spheres,
-                                  int num_spheres, int num_lights, int tile_x,
-                                  int tile_y, int tile_width, int tile_height,
+                                  int num_spheres, int num_lights,
+                                  GPUCamera *camera, int tile_x, int tile_y,
+                                  int tile_width, int tile_height,
                                   int image_width, int image_height,
                                   int max_depth, cudaStream_t stream);
 
@@ -162,12 +163,14 @@ void process_tile_cpu(const Tile &tile, const Scene &scene,
 // =========================================================
 // GPU Memory Management
 // =========================================================
-extern "C" void upload_lights(GPULight *lights, int count);
+extern "C" void upload_lights_and_ambience(GPULight *lights, int coun,
+                                           float3 ambient_light);
 
 class GPUResources {
 private:
   float3 *d_framebuffer;
   GPUSphere *d_spheres;
+  GPUCamera *d_camera;
   size_t fb_size;
   size_t spheres_size;
 
@@ -178,6 +181,7 @@ public:
 
     CUDA_CHECK(cudaMalloc(&d_framebuffer, fb_size));
     CUDA_CHECK(cudaMalloc(&d_spheres, spheres_size));
+    CUDA_CHECK(cudaMalloc(&d_camera, sizeof(GPUCamera)));
   }
 
   ~GPUResources() {
@@ -185,7 +189,7 @@ public:
     CUDA_CHECK(cudaFree(d_spheres));
   }
 
-  void upload_scene(const Scene &scene) {
+  void upload_scene(const Scene &scene, int width, int height) {
     // TODO: STUDENT - Convert scene data to GPU format and upload
     // Pack spheres and lights into float arrays
     std::vector<GPUSphere> h_spheres;
@@ -221,7 +225,52 @@ public:
     }
     // CUDA_CHECK(cudaMemcpyToSymbol(const_lights, h_lights.data(),
     //                               h_lights.size() * sizeof(GPULight)));
-    upload_lights(h_lights.data(), h_lights.size());
+    // AI EDIT: use make_float3 instead of float3 constructor
+    float3 ambient_light = make_float3(scene.ambient_light.x, scene.ambient_light.y,
+                                  scene.ambient_light.z);
+    // END AI EDIT
+    upload_lights_and_ambience(h_lights.data(), h_lights.size(), ambient_light);
+
+    // Add the camera
+    GPUCamera camera;
+    if (scene.has_camera) {
+      // Use camera from scene file
+      float3 lookfrom =
+          make_float3(scene.camera.position.x, scene.camera.position.y,
+                      scene.camera.position.z);
+      float3 lookat =
+          make_float3(scene.camera.look_at.x, scene.camera.look_at.y,
+                      scene.camera.look_at.z);
+      float vfov = scene.camera.fov;
+
+      // AI EDIT: Match CPU camera setup exactly
+      camera.origin = lookfrom;
+      camera.fov = vfov;
+
+      // Calculate basis vectors like CPU version
+      camera.forward = float3_ops::normalize(float3_ops::sub(lookat, lookfrom));
+      float3 world_up = make_float3(0, 1, 0);
+
+      // right = cross(forward, world_up)
+      camera.right = float3_ops::normalize(make_float3(
+          camera.forward.y * world_up.z - camera.forward.z * world_up.y,
+          camera.forward.z * world_up.x - camera.forward.x * world_up.z,
+          camera.forward.x * world_up.y - camera.forward.y * world_up.x));
+
+      // up = cross(right, forward)
+      camera.up = make_float3(
+          camera.right.y * camera.forward.z - camera.right.z * camera.forward.y,
+          camera.right.z * camera.forward.x - camera.right.x * camera.forward.z,
+          camera.right.x * camera.forward.y -
+              camera.right.y * camera.forward.x);
+      // END AI EDIT
+    } else {
+      // Fallback to default camera
+      camera = setup_camera(width, height);
+    }
+    // AI EDIT: fix cudaMemcpy to include all required parameters
+    CUDA_CHECK(cudaMemcpy(d_camera, &camera, sizeof(GPUCamera), cudaMemcpyHostToDevice));
+    // END AI EDIT
   }
 
   void download_tile(const Tile &tile, std::vector<Vec3> &framebuffer,
@@ -255,6 +304,7 @@ public:
 
   float3 *get_framebuffer() { return d_framebuffer; }
   GPUSphere *get_spheres() { return d_spheres; }
+  GPUCamera *get_camera() { return d_camera; }
 };
 
 // =========================================================
@@ -310,7 +360,7 @@ void render_hybrid(const Scene &scene, const Camera &camera,
   // Initialize GPU resources
   GPUResources gpu_resources(width, height, scene.spheres.size(),
                              scene.lights.size());
-  gpu_resources.upload_scene(scene);
+  gpu_resources.upload_scene(scene, width, height);
 
   // Create CUDA streams for pipelining
   const int NUM_STREAMS = 3;
@@ -373,9 +423,10 @@ void render_hybrid(const Scene &scene, const Camera &camera,
         // BEGIN AI EDIT: Fix launch_gpu_kernel call with correct arguments
         launch_gpu_kernel(
             gpu_resources.get_framebuffer(), gpu_resources.get_spheres(),
-            scene.spheres.size(), scene.lights.size(), tile->x_start,
-            tile->y_start, tile->x_end - tile->x_start,
-            tile->y_end - tile->y_start, width, height, max_depth, stream);
+            scene.spheres.size(), scene.lights.size(),
+            gpu_resources.get_camera(), tile->x_start, tile->y_start,
+            tile->x_end - tile->x_start, tile->y_end - tile->y_start, width,
+            height, max_depth, stream);
         // END AI EDIT
 
         // BEGIN AI EDIT: Download tile results from GPU to host framebuffer
@@ -496,15 +547,14 @@ int main(int argc, char *argv[]) {
 
   // BEGIN AI EDIT: Load scene from file using scene_loader
   std::cout << "Loading scene from: " << scene_file << std::endl;
-  SceneData scene_data = load_scene(scene_file);
-  Scene scene = scene_data.scene;
+  Scene scene = load_scene(scene_file);
   // scene.print_stats();
 
   // Setup camera from loaded scene data
-  Vec3 lookfrom = scene_data.camera.position;
-  Vec3 lookat = scene_data.camera.look_at;
+  Vec3 lookfrom = scene.camera.position;
+  Vec3 lookat = scene.camera.look_at;
   Vec3 vup(0, 1, 0);
-  double vfov = scene_data.camera.fov;
+  double vfov = scene.camera.fov;
   // END AI EDIT
 
   // BEGIN AI EDIT: Fix Camera constructor call to match 3-argument signature
