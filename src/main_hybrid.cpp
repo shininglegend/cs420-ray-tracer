@@ -38,6 +38,8 @@
     }                                                                          \
   } while (0)
 
+const int NUM_STREAMS = 3;
+
 // =========================================================
 // Image Output Functions
 // =========================================================
@@ -226,8 +228,8 @@ public:
     // CUDA_CHECK(cudaMemcpyToSymbol(const_lights, h_lights.data(),
     //                               h_lights.size() * sizeof(GPULight)));
     // AI EDIT: use make_float3 instead of float3 constructor
-    float3 ambient_light = make_float3(scene.ambient_light.x, scene.ambient_light.y,
-                                  scene.ambient_light.z);
+    float3 ambient_light = make_float3(
+        scene.ambient_light.x, scene.ambient_light.y, scene.ambient_light.z);
     // END AI EDIT
     upload_lights_and_ambience(h_lights.data(), h_lights.size(), ambient_light);
 
@@ -269,7 +271,8 @@ public:
       camera = setup_camera(width, height);
     }
     // AI EDIT: fix cudaMemcpy to include all required parameters
-    CUDA_CHECK(cudaMemcpy(d_camera, &camera, sizeof(GPUCamera), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_camera, &camera, sizeof(GPUCamera),
+                          cudaMemcpyHostToDevice));
     // END AI EDIT
   }
 
@@ -319,21 +322,25 @@ int estimate_tile_complexity(const Tile &tile, const Scene &scene,
   // - Distance from camera
   // Simple version: sample a few rays and count intersections
 
-  // My Idea 1: Sample an X (top left, top right, middle, bottom left, bottom right)
-  // Count number of intersections. Middle ray counts each intersection 2x. 
-  // BEGIN AI EDIT: Implement X-pattern sampling for complexity estimation
+  // My Idea 1: Sample an X (top left, top right, middle, bottom left, bottom
+  // right) Count number of intersections. Middle ray counts each intersection
+  // 2x. BEGIN AI EDIT: Implement X-pattern sampling for complexity estimation
   int complexity = 0;
-  
+
   // Sample points: corners + middle (X pattern)
-  int sample_x[5] = {tile.x_start, tile.x_end - 1, (tile.x_start + tile.x_end) / 2, tile.x_start, tile.x_end - 1};
-  int sample_y[5] = {tile.y_start, tile.y_start, (tile.y_start + tile.y_end) / 2, tile.y_end - 1, tile.y_end - 1};
-  int weight[5] = {1, 1, 2, 1, 1};  // Middle ray counts 2x
-  
+  int sample_x[5] = {tile.x_start, tile.x_end - 1,
+                     (tile.x_start + tile.x_end) / 2, tile.x_start,
+                     tile.x_end - 1};
+  int sample_y[5] = {tile.y_start, tile.y_start,
+                     (tile.y_start + tile.y_end) / 2, tile.y_end - 1,
+                     tile.y_end - 1};
+  int weight[5] = {1, 1, 2, 1, 1}; // Middle ray counts 2x
+
   for (int i = 0; i < 5; i++) {
-    double u = double(sample_x[i]) / 1280.0;  // Assuming image width
-    double v = double(sample_y[i]) / 720.0;   // Assuming image height
+    double u = double(sample_x[i]) / 1280.0; // Assuming image width
+    double v = double(sample_y[i]) / 720.0;  // Assuming image height
     Ray ray = camera.get_ray(u, v);
-    
+
     // Count intersections with all spheres
     for (const auto &sphere : scene.spheres) {
       double t;
@@ -343,7 +350,7 @@ int estimate_tile_complexity(const Tile &tile, const Scene &scene,
     }
   }
   // END AI EDIT
-  
+
   return complexity; // Base cost + intersection complexity
 }
 
@@ -364,8 +371,12 @@ void render_hybrid(const Scene &scene, const Camera &camera,
 
   std::cout << "Hybrid Rendering..." << std::endl;
 
-  // Create tiles
+  // Split tiles between CPU and GPU based on complexity
+  std::queue<Tile *> cpu_queue;
+  std::queue<Tile *> gpu_queue;
   std::vector<Tile> tiles;
+  cudaStream_t streams[NUM_STREAMS];
+  // Create tiles
   for (int y = 0; y < height; y += tile_size) {
     for (int x = 0; x < width; x += tile_size) {
       int xe = std::min(x + tile_size, width);
@@ -388,21 +399,16 @@ void render_hybrid(const Scene &scene, const Camera &camera,
   gpu_resources.upload_scene(scene, width, height);
 
   // Create CUDA streams for pipelining
-  const int NUM_STREAMS = 3;
-  cudaStream_t streams[NUM_STREAMS];
   for (int i = 0; i < NUM_STREAMS; i++) {
     cudaStreamCreate(&streams[i]);
   }
 
   // TODO: STUDENT - Implement work distribution
-  // Split tiles between CPU and GPU based on complexity
-  std::queue<Tile *> cpu_queue;
-  std::queue<Tile *> gpu_queue;
 
   // Simple strategy: complex tiles to CPU, simple to GPU
   // Threshold if at least x of the rays hit
   // I'm aiming for about 70% on GPU, 30% on CPU to start
-  int complexity_threshold = 7; 
+  int complexity_threshold = 7;
 
   for (auto &tile : tiles) {
     if (tile.complexity_estimate > complexity_threshold) {
@@ -441,7 +447,7 @@ void render_hybrid(const Scene &scene, const Camera &camera,
         Tile *tile = gpu_queue.front();
         gpu_queue.pop();
 
-        // TODO: STUDENT - Launch GPU kernel for this tile
+        // STUDENT - Launch GPU kernel for this tile
         // Use streams for asynchronous execution
         cudaStream_t stream = streams[stream_idx];
         stream_idx = (stream_idx + 1) % NUM_STREAMS;
@@ -496,19 +502,169 @@ void render_hybrid(const Scene &scene, const Camera &camera,
 // =========================================================
 void render_hybrid_pipeline(const Scene &scene, const Camera &camera,
                             std::vector<Vec3> &framebuffer, int width,
-                            int height, int max_depth) {
+                            int height, int max_depth, int tile_size = 64) {
 
   std::cout << "Hybrid Pipeline Rendering..." << std::endl;
 
+  // BEGIN AI EDIT: Improved pseudocode for pipelined version
   // TODO: STUDENT - Implement pipelined version
-  // Stage 1: Tile generation and complexity estimation
-  // Stage 2: GPU kernel execution
-  // Stage 3: CPU processing
-  // Stage 4: Result aggregation
-  // Use pinned memory for faster transfers
+  //
+  // Key insight: The bottleneck is memory transfer overhead (thousands of
+  // small cudaMemcpy calls). Solution: Use pinned memory + single bulk
+  // transfer.
+  //
+  // ==================== SETUP ====================
+  // 1. Allocate PINNED host memory for entire framebuffer:
+  float3 *h_pinned_fb;
+  CUDA_CHECK(cudaMallocHost(&h_pinned_fb, width * height * sizeof(float3)));
 
-  // Placeholder - calls basic hybrid version
-  render_hybrid(scene, camera, framebuffer, width, height, max_depth);
+  // 2. Create tiles and estimate complexity (reuse existing code)
+  // Split tiles between CPU and GPU based on complexity
+  std::queue<Tile *> cpu_queue;
+  std::queue<Tile *> gpu_queue;
+  std::vector<Tile> tiles;
+  cudaStream_t streams[NUM_STREAMS];
+  // Create tiles
+  for (int y = 0; y < height; y += tile_size) {
+    for (int x = 0; x < width; x += tile_size) {
+      int xe = std::min(x + tile_size, width);
+      int ye = std::min(y + tile_size, height);
+      tiles.emplace_back(x, y, xe, ye);
+    }
+  }
+
+  std::cout << "Created " << tiles.size() << " tiles of size " << tile_size
+            << "x" << tile_size << std::endl;
+
+  // Estimate complexity for each tile
+  for (auto &tile : tiles) {
+    tile.complexity_estimate = estimate_tile_complexity(tile, scene, camera);
+  }
+
+  // Initialize GPU resources
+  GPUResources gpu_resources(width, height, scene.spheres.size(),
+                             scene.lights.size());
+  gpu_resources.upload_scene(scene, width, height);
+
+  // Create CUDA streams for pipelining
+  for (int i = 0; i < NUM_STREAMS; i++) {
+    cudaStreamCreate(&streams[i]);
+  }
+
+  // TODO: STUDENT - Implement work distribution
+
+  // Simple strategy: complex tiles to CPU, simple to GPU
+  // Threshold if at least x of the rays hit
+  // I'm aiming for about 70% on GPU, 30% on CPU to start
+  int complexity_threshold = 9;
+
+  for (auto &tile : tiles) {
+    if (tile.complexity_estimate > complexity_threshold) {
+      cpu_queue.push(&tile);
+    } else {
+      gpu_queue.push(&tile);
+    }
+  }
+
+  std::cout << "Distribution: " << cpu_queue.size() << " tiles to CPU, "
+            << gpu_queue.size() << " tiles to GPU" << std::endl;
+  // Track the tiles the GPU processed
+  std::vector<Tile *> gpu_tiles_processed;
+
+  auto start = std::chrono::high_resolution_clock::now();
+
+  // ==================== EXECUTION ====================
+  // 4. Launch CPU and GPU work in parallel using OpenMP sections:
+
+#pragma omp parallel sections
+  {
+#pragma omp section // GPU SECTION
+    {
+      // Launch ALL GPU tile kernels (no sync between launches)
+      // launch_gpu_kernel(..., tile, stream[i++ % NUM_STREAMS]);
+      int i = 0;
+      while (!gpu_queue.empty()) {
+        Tile *tile = gpu_queue.front();
+        gpu_tiles_processed.push_back(tile);
+        gpu_queue.pop();
+        launch_gpu_kernel(
+            gpu_resources.get_framebuffer(), gpu_resources.get_spheres(),
+            scene.spheres.size(), scene.lights.size(),
+            gpu_resources.get_camera(), tile->x_start, tile->y_start,
+            tile->x_end - tile->x_start, tile->y_end - tile->y_start, width,
+            height, max_depth, streams[i++ % NUM_STREAMS]);
+        tile->processed = true;
+        i++;
+      }
+
+      // Single sync point after all launches
+      cudaDeviceSynchronize();
+
+      // ONE bulk download of entire GPU framebuffer (Bug fix from Ai here)
+      cudaMemcpy(h_pinned_fb, gpu_resources.get_framebuffer(),
+                 width * height * sizeof(float3), cudaMemcpyDeviceToHost);
+    }
+
+#pragma omp section // CPU SECTION
+    {
+      // BEGIN AI EDIT: Copy queue to vector for OpenMP parallel for
+      std::vector<Tile *> cpu_tiles_vec;
+      while (!cpu_queue.empty()) {
+        cpu_tiles_vec.push_back(cpu_queue.front());
+        cpu_queue.pop();
+      }
+#pragma omp parallel for schedule(dynamic)
+      for (size_t i = 0; i < cpu_tiles_vec.size(); i++) {
+        Tile *tile = cpu_tiles_vec[i];
+        process_tile_cpu(*tile, scene, camera, framebuffer, width, height,
+                         max_depth);
+        tile->processed = true;
+      }
+      // END AI EDIT
+    }
+  }
+
+  // ==================== MERGE ====================
+  // 5. Convert GPU results (float3) to final framebuffer (Vec3):
+  //    - Only convert pixels from GPU tiles (CPU tiles already in framebuffer)
+  // Loop over GPU tiles
+  // BEGIN AI EDIT: Fix range-based for loop syntax
+  for (Tile *tile : gpu_tiles_processed) {
+    for (int x = tile->x_start; x < tile->x_end; x++) {
+      for (int y = tile->y_start; y < tile->y_end; y++) {
+        framebuffer[y * width + x] =
+            Vec3(h_pinned_fb[y * width + x].x, h_pinned_fb[y * width + x].y,
+                 h_pinned_fb[y * width + x].z);
+      }
+    }
+  }
+  // END AI EDIT
+
+  // ==================== CLEANUP ====================
+  CUDA_CHECK(cudaFreeHost(h_pinned_fb));
+
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> diff = end - start;
+  std::cout << "Hybrid rendering time: " << diff.count() << " seconds"
+            << std::endl;
+
+  // Cleanup streams
+  for (int i = 0; i < NUM_STREAMS; i++) {
+    cudaStreamDestroy(streams[i]);
+  }
+
+  // Verify all tiles processed
+  int unprocessed = 0;
+  for (const auto &tile : tiles) {
+    if (!tile.processed)
+      unprocessed++;
+  }
+  if (unprocessed > 0) {
+    std::cerr << "Warning: " << unprocessed << " tiles not processed!"
+              << std::endl;
+  }
+  // Expected speedup: Eliminates ~13,000 cudaMemcpy calls → 1 bulk transfer
+  // END Psedeudocode Ai Edit
 }
 
 // =========================================================
