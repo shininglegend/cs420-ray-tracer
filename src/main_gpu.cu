@@ -339,37 +339,6 @@ void write_ppm(const std::string &filename,
   }
 }
 
-GPUCamera setup_camera(int width, int height) {
-  // Camera parameters
-  float3 lookfrom = make_float3(0, 2, 5);
-  float3 lookat = make_float3(0, 0, -20);
-  float vfov = 60.0f;
-
-  // AI EDIT: Match CPU camera setup exactly
-  GPUCamera camera;
-  camera.origin = lookfrom;
-  camera.fov = vfov;
-
-  // Calculate basis vectors like CPU version
-  camera.forward = float3_ops::normalize(float3_ops::sub(lookat, lookfrom));
-  float3 world_up = make_float3(0, 1, 0);
-
-  // right = cross(forward, world_up)
-  camera.right = float3_ops::normalize(make_float3(
-      camera.forward.y * world_up.z - camera.forward.z * world_up.y,
-      camera.forward.z * world_up.x - camera.forward.x * world_up.z,
-      camera.forward.x * world_up.y - camera.forward.y * world_up.x));
-
-  // up = cross(right, forward)
-  camera.up = make_float3(
-      camera.right.y * camera.forward.z - camera.right.z * camera.forward.y,
-      camera.right.z * camera.forward.x - camera.right.x * camera.forward.z,
-      camera.right.x * camera.forward.y - camera.right.y * camera.forward.x);
-  // END AI EDIT
-
-  return camera;
-}
-
 int main(int argc, char *argv[]) {
   // Image settings
   const int width = 1280;
@@ -395,7 +364,7 @@ int main(int argc, char *argv[]) {
 
   // BEGIN AI EDIT: Load scene from file and convert to GPU structures
   std::cout << "Loading scene from: " << scene_file << "\n\n";
-  SceneData scene_data = load_scene(scene_file);
+  Scene scene = load_scene(scene_file);
   // print_scene_info(scene_data);
 
   // Convert CPU scene to GPU structures
@@ -403,7 +372,7 @@ int main(int argc, char *argv[]) {
   std::vector<GPULight> h_lights;
 
   // Convert spheres
-  for (const auto &sphere : scene_data.scene.spheres) {
+  for (const auto &sphere : scene.spheres) {
     GPUSphere gpu_sphere;
     gpu_sphere.center =
         make_float3(sphere.center.x, sphere.center.y, sphere.center.z);
@@ -417,13 +386,13 @@ int main(int argc, char *argv[]) {
   }
 
   // Convert lights
-  if (scene_data.scene.lights.size() > 100) {
-    std::cerr << "Error: Scene has " << scene_data.scene.lights.size()
+  if (scene.lights.size() > 100) {
+    std::cerr << "Error: Scene has " << scene.lights.size()
               << " lights, but maximum is 100\n";
     return 1;
   }
 
-  for (const auto &light : scene_data.scene.lights) {
+  for (const auto &light : scene.lights) {
     GPULight gpu_light;
     gpu_light.position =
         make_float3(light.position.x, light.position.y, light.position.z);
@@ -452,15 +421,14 @@ int main(int argc, char *argv[]) {
 
   // BEGIN AI EDIT: Setup camera from loaded scene data
   GPUCamera camera;
-  if (scene_data.has_camera) {
+  if (scene.has_camera) {
     // Use camera from scene file
     float3 lookfrom =
-        make_float3(scene_data.camera.position.x, scene_data.camera.position.y,
-                    scene_data.camera.position.z);
-    float3 lookat =
-        make_float3(scene_data.camera.look_at.x, scene_data.camera.look_at.y,
-                    scene_data.camera.look_at.z);
-    float vfov = scene_data.camera.fov;
+        make_float3(scene.camera.position.x, scene.camera.position.y,
+                    scene.camera.position.z);
+    float3 lookat = make_float3(scene.camera.look_at.x, scene.camera.look_at.y,
+                                scene.camera.look_at.z);
+    float vfov = scene.camera.fov;
 
     // AI EDIT: Match CPU camera setup exactly
     camera.origin = lookfrom;

@@ -181,3 +181,34 @@ struct GPUCamera {
     return ray;
   }
 };
+
+GPUCamera setup_camera(int width, int height) {
+  // Camera parameters
+  float3 lookfrom = make_float3(0, 2, 5);
+  float3 lookat = make_float3(0, 0, -20);
+  float vfov = 60.0f;
+
+  // AI EDIT: Match CPU camera setup exactly
+  GPUCamera camera;
+  camera.origin = lookfrom;
+  camera.fov = vfov;
+
+  // Calculate basis vectors like CPU version
+  camera.forward = float3_ops::normalize(float3_ops::sub(lookat, lookfrom));
+  float3 world_up = make_float3(0, 1, 0);
+
+  // right = cross(forward, world_up)
+  camera.right = float3_ops::normalize(make_float3(
+      camera.forward.y * world_up.z - camera.forward.z * world_up.y,
+      camera.forward.z * world_up.x - camera.forward.x * world_up.z,
+      camera.forward.x * world_up.y - camera.forward.y * world_up.x));
+
+  // up = cross(right, forward)
+  camera.up = make_float3(
+      camera.right.y * camera.forward.z - camera.right.z * camera.forward.y,
+      camera.right.z * camera.forward.x - camera.right.x * camera.forward.z,
+      camera.right.x * camera.forward.y - camera.right.y * camera.forward.x);
+  // END AI EDIT
+
+  return camera;
+}

@@ -112,12 +112,10 @@ int main(int argc, char *argv[]) {
 
   // Create scene
   Scene scene;
-  SceneData scene_data;
 
   std::cout << "Testing scene loader with: " << scene_file << "\n\n";
   // Load the scene
-  scene_data = load_scene(scene_file);
-  scene = scene_data.scene;
+  scene = load_scene(scene_file);
 
   // Print detailed info
   // print_scene_info(scene_data);
@@ -131,8 +129,7 @@ int main(int argc, char *argv[]) {
   //     scene Vec3(0, 0, -20),     // Look at: center of the sphere arrangement
   //     60                   // Field of view: 60 degrees
   // );
-  Camera camera(scene_data.camera.position, scene_data.camera.look_at,
-                scene_data.camera.fov);
+  Camera camera(scene.camera.position, scene.camera.look_at, scene.camera.fov);
   // END AI EDIT
 
   // Framebuffer

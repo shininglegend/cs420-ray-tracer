@@ -1,8 +1,8 @@
 #ifndef SCENE_H
 #define SCENE_H
 
-#include "ray_math_constants.h"
 #include "ray.h"
+#include "ray_math_constants.h"
 #include "sphere.h"
 #include "vec3.h"
 #include <vector>
@@ -13,11 +13,24 @@ struct Light {
   double intensity;
 };
 
+// Camera configuration structure (separate from the Camera class in main.cpp)
+struct CameraConfig {
+  Vec3 position;
+  Vec3 look_at;
+  double fov;
+
+  CameraConfig() : position(0, 0, 0), look_at(0, 0, -1), fov(60.0) {}
+  CameraConfig(Vec3 pos, Vec3 target, double field_of_view)
+      : position(pos), look_at(target), fov(field_of_view) {}
+};
+
 class Scene {
 public:
   std::vector<Sphere> spheres;
   std::vector<Light> lights;
   Vec3 ambient_light;
+  CameraConfig camera;
+  bool has_camera;
 
   // Scene() : ambient_light(0.1, 0.1, 0.1) {}
 
@@ -58,7 +71,8 @@ public:
     double light_distance = to_light.length();
     Vec3 light_dir = to_light.normalized();
 
-    // BEGIN AI EDIT: Offset shadow ray origin to avoid self-intersection (fixes speckling)
+    // BEGIN AI EDIT: Offset shadow ray origin to avoid self-intersection (fixes
+    // speckling)
     Ray shadow_ray(point + light_dir * EPSILON, light_dir);
     // END AI EDIT
 
