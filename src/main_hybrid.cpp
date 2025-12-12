@@ -24,8 +24,8 @@
 #include "vec3.h"
 
 // CUDA runtime API (for hybrid execution)
-#include <cuda_runtime.h>
 #include "gpu_shared.h"
+#include <cuda_runtime.h>
 
 // CUDA error checking macro
 #define CUDA_CHECK(call)                                                       \
@@ -37,7 +37,6 @@
       exit(1);                                                                 \
     }                                                                          \
   } while (0)
-
 
 // =========================================================
 // Image Output Functions
@@ -97,13 +96,12 @@ struct Tile {
 // =========================================================
 // GPU Kernel Declaration (implemented in kernel.cu)
 // =========================================================
-extern "C" void launch_gpu_kernel(float *d_framebuffer, float *d_spheres,
-                                  int num_spheres, float *d_lights,
-                                  int num_lights, float *camera_params,
-                                  int tile_x, int tile_y, int tile_width,
-                                  int tile_height, int image_width,
-                                  int image_height, int max_depth,
-                                  cudaStream_t stream);
+// BEGIN AI EDIT: Fix declaration to match call site and use float3*
+extern "C" void launch_gpu_kernel(float3 *d_framebuffer, GPUSphere *d_spheres,
+                                  int num_spheres, int num_lights, int tile_x,
+                                  int tile_y, int tile_width, int tile_height,
+                                  int image_width, int image_height,
+                                  int max_depth, cudaStream_t stream);
 
 // =========================================================
 // CPU Ray Tracing (Complex Shading Path)
@@ -164,10 +162,12 @@ void process_tile_cpu(const Tile &tile, const Scene &scene,
 // =========================================================
 // GPU Memory Management
 // =========================================================
+extern "C" void upload_lights(GPULight *lights, int count);
+
 class GPUResources {
 private:
-  float *d_framebuffer;
-  float *d_spheres;
+  float3 *d_framebuffer;
+  GPUSphere *d_spheres;
   size_t fb_size;
   size_t spheres_size;
 
@@ -219,8 +219,9 @@ public:
       gpu_light.intensity = light.intensity;
       h_lights.push_back(gpu_light);
     }
-    CUDA_CHECK(cudaMemcpyToSymbol(const_lights, h_lights.data(),
-                                  h_lights.size() * sizeof(GPULight)));
+    // CUDA_CHECK(cudaMemcpyToSymbol(const_lights, h_lights.data(),
+    //                               h_lights.size() * sizeof(GPULight)));
+    upload_lights(h_lights.data(), h_lights.size());
   }
 
   void download_tile(const Tile &tile, std::vector<Vec3> &framebuffer,
@@ -252,8 +253,8 @@ public:
     }
   }
 
-  float *get_framebuffer() { return d_framebuffer; }
-  float *get_spheres() { return d_spheres; }
+  float3 *get_framebuffer() { return d_framebuffer; }
+  GPUSphere *get_spheres() { return d_spheres; }
 };
 
 // =========================================================
@@ -369,7 +370,17 @@ void render_hybrid(const Scene &scene, const Camera &camera,
         cudaStream_t stream = streams[stream_idx];
         stream_idx = (stream_idx + 1) % NUM_STREAMS;
 
-        // launch_gpu_kernel(framebuffer, );
+        // BEGIN AI EDIT: Fix launch_gpu_kernel call with correct arguments
+        launch_gpu_kernel(
+            gpu_resources.get_framebuffer(), gpu_resources.get_spheres(),
+            scene.spheres.size(), scene.lights.size(), tile->x_start,
+            tile->y_start, tile->x_end - tile->x_start,
+            tile->y_end - tile->y_start, width, height, max_depth, stream);
+        // END AI EDIT
+
+        // BEGIN AI EDIT: Download tile results from GPU to host framebuffer
+        gpu_resources.download_tile(*tile, framebuffer, width, stream);
+        // END AI EDIT
 
         tile->processed = true;
       }

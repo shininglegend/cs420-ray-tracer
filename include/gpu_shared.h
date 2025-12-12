@@ -10,6 +10,17 @@
 #include <math_constants.h>
 #include <vector>
 
+// CUDA error checking macro
+#define CUDA_CHECK(call)                                                       \
+  do {                                                                         \
+    cudaError_t error = call;                                                  \
+    if (error != cudaSuccess) {                                                \
+      std::cerr << "CUDA error at " << __FILE__ << ":" << __LINE__ << " - "    \
+                << cudaGetErrorString(error) << std::endl;                     \
+      exit(1);                                                                 \
+    }                                                                          \
+  } while (0)
+
 // =========================================================
 // GPU Vector and Ray Classes (simplified for CUDA)
 // =========================================================
@@ -170,72 +181,3 @@ struct GPUCamera {
     return ray;
   }
 };
-
-// Consts
-__constant__ float3 ambient_light = {0.1f, 0.1f, 0.1f};
-__constant__ double k_specular = 0.5;
-__constant__ GPULight const_lights[100]; // Set max 100
-
-// Helper functions
-__device__ bool in_shadow(const float3 &point, const GPULight &light,
-                          GPUSphere *spheres, int num_spheres) {
-  float3 to_light = float3_ops::sub(light.position, point);
-  float light_dist = float3_ops::length(to_light);
-  float3 light_dir = float3_ops::normalize(to_light);
-
-  GPURay shadow_ray;
-  shadow_ray.origin = point;
-  shadow_ray.direction = light_dir;
-
-  // Check if any sphere blocks the light
-  for (int i = 0; i < num_spheres; i++) {
-    float t;
-    if (spheres[i].intersect(shadow_ray, EPSILON, light_dist, t)) {
-      return true; // Something blocks the light
-    }
-  }
-  return false;
-}
-
-// Calculate shading (ambient + diffuse + specular)
-__device__ float3 shade(const float3 &point, const float3 &normal,
-                        const GPUMaterial &mat, const float3 &view_dir,
-                        const float3 hit, GPUSphere *spheres, int num_spheres,
-                        int sphere_idx, int num_lights) {
-
-  // From shade function in scene.h
-  // Start with ambient lighting
-  float3 color =
-      float3_ops::mul(spheres[sphere_idx].material.albedo, ambient_light);
-
-  // For each light:
-  for (int light_idx = 0; light_idx < num_lights; light_idx++) {
-    // 1. Check if in shadow
-    if (in_shadow(hit, const_lights[light_idx], spheres, num_spheres)) {
-      // std::cout << "Skipping...";
-      continue;
-    }
-
-    // 2. Calculate diffuse component (Lambert)
-    float3 light_dir = float3_ops::normalize(
-        float3_ops::sub(const_lights[light_idx].position, point));
-    // AI EDIT: Replace std::max with fmaxf for CUDA
-    float n_dot_l = fmaxf(0.0f, float3_ops::dot(normal, light_dir));
-    // AI EDIT: Fix diffuse - use (1 - reflectivity) not reflectivity
-    float3 diffuse = float3_ops::mul(
-        float3_ops::mul(mat.albedo, (1.0f - mat.metallic)), n_dot_l);
-
-    // 3. Calculate specular component (Phong)
-    float3 reflect_dir =
-        float3_ops::reflect(float3_ops::mul(light_dir, -1.0f), normal);
-    // AI EDIT: Replace std::max with fmaxf for CUDA
-    float r_dot_v = fmaxf(0.0f, float3_ops::dot(reflect_dir, view_dir));
-    double spec_factor = pow(r_dot_v, mat.shininess);
-    float3 specular = float3_ops::mul(
-        float3_ops::mul(const_lights[light_idx].color, k_specular),
-        spec_factor);
-
-    color = float3_ops::add(color, float3_ops::add(diffuse, specular));
-  }
-  return color;
-}
